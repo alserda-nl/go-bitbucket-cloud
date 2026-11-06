@@ -1,0 +1,49 @@
+package client
+
+import (
+	"log/slog"
+	"net/http"
+	"time"
+)
+
+// loggingTransport logs one line per attempt: the method, the path, the status, the attempt's
+// number and how long it took until the answer's headers. Never the query, a header or a body: a
+// pipeline cache's download address carried a signed token in its query (2026-10-26), a
+// variable's body carries its value, and a header the credential.
+type loggingTransport struct {
+	next   http.RoundTripper
+	logger *slog.Logger
+}
+
+// RoundTrip sends the request and logs the attempt at debug level.
+func (l *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	start := time.Now()
+	response, err := l.next.RoundTrip(req)
+
+	attempt, _ := req.Context().Value(attemptKey{}).(int)
+	attributes := []slog.Attr{
+		slog.String("method", req.Method),
+		slog.String("path", req.URL.EscapedPath()),
+		slog.Int("attempt", attempt),
+		slog.Duration("duration", time.Since(start)),
+	}
+	if err != nil {
+		attributes = append(attributes, slog.String("error", err.Error()))
+	} else {
+		attributes = append(attributes, slog.Int("status", response.StatusCode))
+	}
+
+	l.logger.LogAttrs(req.Context(), levelOf(response, err), "bitbucket request", attributes...)
+
+	return response, err
+}
+
+// levelOf returns Warn for an attempt that got no answer, a 429 or a 5xx, the attempts the retries
+// are for, and Debug for any other.
+func levelOf(response *http.Response, err error) slog.Level {
+	if err != nil || response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= http.StatusInternalServerError {
+		return slog.LevelWarn
+	}
+
+	return slog.LevelDebug
+}
