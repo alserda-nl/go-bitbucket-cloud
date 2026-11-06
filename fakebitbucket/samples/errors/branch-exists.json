@@ -1,0 +1,17 @@
+{
+  "body": {
+    "data": {
+      "key": "BRANCH_ALREADY_EXISTS"
+    },
+    "error": {
+      "code": "BRANCH_ALREADY_EXISTS",
+      "data": {
+        "key": "BRANCH_ALREADY_EXISTS"
+      },
+      "message": "Branch \"develop\" already exists"
+    },
+    "type": "error"
+  },
+  "content_type": "application/json; charset=utf-8",
+  "status": 400
+}

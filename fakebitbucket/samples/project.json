@@ -1,0 +1,59 @@
+{
+  "created_on": "2026-10-14T06:38:37.737143+00:00",
+  "description": "whole life probe",
+  "has_publicly_visible_repos": false,
+  "is_private": true,
+  "key": "RPWHOLE",
+  "links": {
+    "avatar": {
+      "href": "https://bitbucket.org/name-1/workspace/projects/RPWHOLE/avatar/32?ts=1791959917"
+    },
+    "html": {
+      "href": "https://bitbucket.org/name-1/workspace/projects/RPWHOLE"
+    },
+    "repositories": {
+      "href": "https://api.bitbucket.org/2.0/repositories/name-1?q=project.key=\"RPWHOLE\""
+    },
+    "self": {
+      "href": "https://api.bitbucket.org/2.0/workspaces/name-1/projects/RPWHOLE"
+    }
+  },
+  "name": "whole life probe",
+  "owner": {
+    "display_name": "name-1",
+    "links": {
+      "avatar": {
+        "href": "https://bitbucket.org/account/name-2/avatar/"
+      },
+      "html": {
+        "href": "https://bitbucket.org/%7B00000000-0000-4000-8000-000000000001%7D/"
+      },
+      "self": {
+        "href": "https://api.bitbucket.org/2.0/workspaces/%7B00000000-0000-4000-8000-000000000001%7D"
+      }
+    },
+    "type": "team",
+    "username": "name-2",
+    "uuid": "{00000000-0000-4000-8000-000000000001}"
+  },
+  "type": "project",
+  "updated_on": "2026-10-14T06:38:37.737156+00:00",
+  "uuid": "{00000000-0000-4000-8000-000000000002}",
+  "workspace": {
+    "links": {
+      "avatar": {
+        "href": "https://bitbucket.org/workspaces/name-1/avatar/?ts=1791660648"
+      },
+      "html": {
+        "href": "https://bitbucket.org/name-1/"
+      },
+      "self": {
+        "href": "https://api.bitbucket.org/2.0/workspaces/name-1"
+      }
+    },
+    "name": "name-1",
+    "slug": "name-1",
+    "type": "workspace",
+    "uuid": "{00000000-0000-4000-8000-000000000001}"
+  }
+}

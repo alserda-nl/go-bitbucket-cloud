@@ -1,0 +1,6 @@
+{
+  "access_token": "an-access-token",
+  "expires_in": 3600,
+  "scope": "project repository",
+  "token_type": "bearer"
+}

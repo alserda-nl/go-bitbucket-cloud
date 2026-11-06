@@ -1,0 +1,9 @@
+{
+  "body": {
+    "arguments": {},
+    "key": "agent-service.runner.not-found",
+    "message": "Runner with the uuid {00000000-0000-4000-8000-000000000001} not found."
+  },
+  "content_type": "application/json; charset=utf-8",
+  "status": 404
+}
