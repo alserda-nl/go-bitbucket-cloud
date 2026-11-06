@@ -1,0 +1,65 @@
+version: "2"
+
+run:
+  tests: true
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - copyloopvar
+    - depguard
+    - dogsled
+    - dupl
+    - errcheck
+    - funlen
+    - gochecknoglobals
+    - gochecknoinits
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - goprintffuncname
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - nolintlint
+    - prealloc
+    - staticcheck
+    - tparallel
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+  settings:
+    depguard:
+      rules:
+        # The client's, the models' and the fake's code depend on the standard library only, so
+        # importing them adds nothing to a build; the tests may use testify.
+        runtime:
+          list-mode: strict
+          files:
+            - "!$test"
+          allow:
+            - $gostd
+            - github.com/alserda-nl/go-bitbucket-cloud
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters: [dupl, funlen, goconst, unparam]
+      # The tests' made-up credentials and token addresses are not secrets.
+      - path: _test\.go
+        linters: [gosec]
+        text: G101
+
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
