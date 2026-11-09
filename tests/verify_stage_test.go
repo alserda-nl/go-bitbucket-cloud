@@ -63,6 +63,7 @@ func (s *verifyStage) the_project_is_verified(key string) *verifyStage {
 
 		return project.Key == key, nil
 	}, s.options...)
+
 	return s
 }
 

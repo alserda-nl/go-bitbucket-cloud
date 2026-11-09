@@ -227,6 +227,7 @@ func readErrorObject(apiErr *APIError, object errorObject) {
 		if json.Unmarshal(complaint, &complaints) != nil {
 			complaints = []string{rawText(complaint)}
 		}
+
 		apiErr.Fields[field] = complaints
 	}
 }

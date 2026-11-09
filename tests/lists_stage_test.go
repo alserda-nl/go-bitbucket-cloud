@@ -70,6 +70,7 @@ func (s *listStage) the_pages_asked_for_were(pagelens ...string) *listStage {
 	for _, request := range requests {
 		asked = append(asked, request.Query.Get("pagelen"))
 	}
+
 	s.assert.Equal(pagelens, asked)
 	return s
 }

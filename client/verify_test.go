@@ -95,7 +95,11 @@ func TestVerify_StopsAtARefusalNoLaterReadChanges(t *testing.T) {
 
 	err := Verify(t.Context(), func(context.Context) (bool, error) {
 		reads++
-		return false, &APIError{StatusCode: http.StatusForbidden, Method: http.MethodGet, Path: "/2.0/a/path"}
+		return false, &APIError{
+			StatusCode: http.StatusForbidden,
+			Method:     http.MethodGet,
+			Path:       "/2.0/a/path",
+		}
 	}, WithInterval(0))
 
 	assert.ErrorIs(t, err, ErrNotVerified)
@@ -105,7 +109,11 @@ func TestVerify_StopsAtARefusalNoLaterReadChanges(t *testing.T) {
 
 func TestVerify_NamesTheLastErrorWithoutWrappingIt(t *testing.T) {
 	err := Verify(t.Context(), func(context.Context) (bool, error) {
-		return false, &APIError{StatusCode: http.StatusNotFound, Method: http.MethodGet, Path: "/2.0/a/path"}
+		return false, &APIError{
+			StatusCode: http.StatusNotFound,
+			Method:     http.MethodGet,
+			Path:       "/2.0/a/path",
+		}
 	}, WithInterval(0), WithMaxAttempts(2))
 
 	assert.ErrorIs(t, err, ErrNotVerified)

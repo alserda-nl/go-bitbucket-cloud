@@ -245,9 +245,11 @@ func TestList_ReturnsTheErrorOfAPage(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNotFound)
 }
 
-// pagingTransport answers a list of total items, page by page, as the repository endpoints do.
+// pagingTransport answers a list page by page, as the repository endpoints do.
 type pagingTransport struct {
-	total    int
+	// total is how many items the list holds.
+	total int
+	// requests are the requests it got, in the order they came.
 	requests []*http.Request
 }
 

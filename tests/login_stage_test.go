@@ -131,6 +131,7 @@ func (s *loginStage) only_these_projects_are_listed(keys ...string) *loginStage 
 	for _, project := range s.projects {
 		listed = append(listed, project.Key)
 	}
+
 	s.assert.Equal(keys, listed)
 	return s
 }

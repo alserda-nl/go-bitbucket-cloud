@@ -86,7 +86,6 @@ func TestLogin_ARefusedAPITokenGets401(t *testing.T) {
 }
 
 func TestLogin_RequestsRefusedTogetherRenewTheTokenOnce(t *testing.T) {
-	// Twenty reads whose token expired at once: one renewal serves them all.
 	given, when, then := newLoginStage(t)
 
 	given.a_private_project("ABC").
@@ -94,6 +93,7 @@ func TestLogin_RequestsRefusedTogetherRenewTheTokenOnce(t *testing.T) {
 
 	when.the_project_is_read("ABC")
 
+	// Twenty reads whose token expired at once: one renewal serves them all.
 	given.the_access_token_has_expired()
 
 	when.the_project_is_read_by_n_requests_at_once("ABC", 20)
@@ -116,9 +116,9 @@ func TestLogin_ATokenRequestAnswered429IsTriedAgain(t *testing.T) {
 }
 
 func TestLogin_ATokenRequestAnswered503IsTriedAgain(t *testing.T) {
+	// Unlike a call's POST: a second grant only issues another token.
 	given, when, then := newLoginStage(t)
 
-	// Unlike a call's POST: a second grant only issues another token.
 	given.a_private_project("ABC").
 		and().the_client_logs_in_with(oauthConsumer()).
 		and().bitbucket_answers_the_next_request_with(http.StatusServiceUnavailable)

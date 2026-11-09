@@ -118,7 +118,7 @@ func TestProject_TimestampsTakeAnyNumberOfFractionDigits(t *testing.T) {
 			var project models.Project
 			require.NoError(t, json.Unmarshal(fmt.Appendf(nil, `{"created_on": %q}`, testCase.createdOn), &project))
 
-			assert.True(t, testCase.expected.Equal(project.CreatedOn), "created_on %q: want %s, got %s", testCase.createdOn, testCase.expected, project.CreatedOn)
+			assert.True(t, testCase.expected.Equal(project.CreatedOn), "json.Unmarshal of created_on %q: want %s, got %s", testCase.createdOn, testCase.expected, project.CreatedOn)
 		})
 	}
 }

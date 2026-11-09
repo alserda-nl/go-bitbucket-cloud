@@ -17,12 +17,14 @@ import (
 
 const tokenAddress = "https://bitbucket.org/site/oauth2/access_token"
 
-// tokenServer stands in for the token address: it issues token-1, token-2 and so on, each
-// valid for expiresIn seconds, and counts the grants.
+// tokenServer stands in for the token address: it issues token-1, token-2 and so on.
 type tokenServer struct {
+	// expiresIn is how many seconds each token lasts.
 	expiresIn int
-	grants    int
-	forms     []string
+	// grants counts the tokens issued.
+	grants int
+	// forms are the form bodies of the token requests it granted.
+	forms []string
 }
 
 func (s *tokenServer) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -56,11 +58,13 @@ func TestTokenSource_ARequestWaitingForTheTokenLeavesWhenItsContextEnds(t *testi
 
 		return stubResponse(http.StatusOK, nil, `{"access_token": "token", "expires_in": 3600}`), nil
 	}), time.Now)
+
 	var first sync.WaitGroup
 	first.Go(func() {
 		_, _ = tokens.current(t.Context())
 	})
 	<-fetching
+
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
@@ -101,6 +105,7 @@ func TestTokenSource_RenewsOnlyATokenNobodyRenewedYet(t *testing.T) {
 
 	fresh, err := tokens.renew(t.Context(), stale)
 	require.NoError(t, err)
+
 	// A request that was refused together with the first renews the same stale token.
 	renewedByAnother, err := tokens.renew(t.Context(), stale)
 	require.NoError(t, err)

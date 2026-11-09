@@ -69,6 +69,7 @@ func list[T any](ctx context.Context, c *Client, segments []string, largestPage 
 	if settings.limited {
 		pageSize = min(pageSize, settings.limit)
 	}
+
 	first, err := c.apiURL(segments, url.Values{"pagelen": {strconv.Itoa(pageSize)}})
 	if err != nil {
 		return nil, err
@@ -96,6 +97,7 @@ func list[T any](ctx context.Context, c *Client, segments []string, largestPage 
 		if err != nil {
 			return nil, err
 		}
+
 		// A next link to a page the list already gave would repeat the same requests until ctx ends.
 		if fetched[next.String()] {
 			return nil, fmt.Errorf("bitbucket: the list %s answered a next link to a page it already gave, %q", first.EscapedPath(), current.Next)

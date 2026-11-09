@@ -19,12 +19,14 @@ import (
 	"github.com/alserda-nl/go-bitbucket-cloud/models"
 )
 
-// answer is a fake's answer: its status and decoded body.
+// answer is what send and do return: the fake's answer to one request.
 type answer struct {
+	// status is the answer's HTTP status.
 	status int
-	// body is the answer decoded when it is a JSON object; raw is the answer as it came.
+	// body is the answer decoded when it is a JSON object.
 	body map[string]any
-	raw  []byte
+	// raw is the answer as it came.
+	raw []byte
 }
 
 // send sends a request to the fake as the API token's holder, or with the given Authorization.
@@ -52,6 +54,7 @@ func do(t *testing.T, request *http.Request) answer {
 
 	raw, err := io.ReadAll(response.Body)
 	require.NoError(t, err)
+
 	var body map[string]any
 	_ = json.Unmarshal(raw, &body)
 
@@ -84,6 +87,7 @@ func TestServer_FindsAWorkspaceBySlugInAnyCaseOrByUUIDInBraces(t *testing.T) {
 	assert.Equal(t, http.StatusOK, bySlug.status)
 	assert.Equal(t, "acme", bySlug.body["slug"])
 	assert.Equal(t, http.StatusOK, byUUID.status)
+
 	assert.Equal(t, http.StatusNotFound, withoutBraces.status)
 	assert.Equal(t, fmt.Sprintf("No workspace with identifier '%s'.", strings.Trim(workspace.UUID, "{}")), errorMessage(withoutBraces.body))
 }
@@ -102,6 +106,7 @@ func TestServer_AnswersAProjectWithItsOwnerAndWorkspaceInTheShortForms(t *testin
 	assert.Equal(t, []string{"links", "name", "slug", "type", "uuid"}, slices.Sorted(maps.Keys(embedded)))
 	// The owner is a team, which has no account ID or nickname.
 	assert.Equal(t, []string{"display_name", "links", "type", "username", "uuid"}, slices.Sorted(maps.Keys(owner)))
+
 	assert.Equal(t, http.StatusNotFound, lowercase.status, "a project key is case-sensitive")
 	assert.Equal(t, recordedBody(t, "errors/project-not-found.json"), lowercase.body)
 }
@@ -122,8 +127,10 @@ func TestServer_PagesTheProjectsListAsBitbucketDoes(t *testing.T) {
 	assert.Equal(t, float64(120), firstPage.body["size"])
 	assert.Len(t, firstPage.body["values"], 50)
 	assert.Equal(t, fmt.Sprintf("%s/2.0/workspaces/acme/projects?page=2", fake.URL), firstPage.body["next"])
+
 	assert.Len(t, lastPage.body["values"], 20)
 	assert.NotContains(t, lastPage.body, "next")
+
 	assert.Equal(t, http.StatusBadRequest, tooLarge.status)
 	assert.Equal(t, recordedBody(t, "errors/invalid-pagelen.json"), tooLarge.body)
 	assert.Equal(t, http.StatusBadRequest, notANumber.status)
@@ -309,6 +316,7 @@ func TestServer_RefusesATokenRequestItDoesNotTake(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, wrongSecret.status)
 	assert.Equal(t, "invalid_client", wrongSecret.body["error"])
+
 	assert.Equal(t, http.StatusBadRequest, otherGrant.status)
 	assert.Equal(t, "unsupported_grant_type", otherGrant.body["error"])
 }
@@ -411,6 +419,7 @@ func differentFields(path string, expected, actual any) []string {
 
 			different = append(different, differentFields(fmt.Sprintf("%s.%s", path, key), expectedObject[key], actualObject[key])...)
 		}
+
 		for _, key := range slices.Sorted(maps.Keys(actualObject)) {
 			if _, found := expectedObject[key]; !found {
 				different = append(different, fmt.Sprintf("%s.%s: not in the sample", path, key))

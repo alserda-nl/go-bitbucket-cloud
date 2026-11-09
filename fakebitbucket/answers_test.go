@@ -16,8 +16,7 @@ import (
 // TestAnswers sends a request to every API route the fake serves and, when FAKEBITBUCKET_ANSWERS
 // names a file, writes the answers there as a list of operation, status and body, which the
 // maintainers compare with Bitbucket's own answers by this test's name: the name, the variable and
-// the three keys stay as they are. The token address is left out, with no answer of Bitbucket's to
-// compare it with.
+// the three keys stay as they are.
 func TestAnswers(t *testing.T) {
 	fake := fakebitbucket.New(t)
 	workspace := seededWorkspace(fake, "acme")
@@ -54,6 +53,7 @@ func TestAnswers(t *testing.T) {
 	}
 
 	for _, route := range fakebitbucket.RoutePatterns(fake) {
+		// The token address is left out, with no answer of Bitbucket's to compare it with.
 		if route != fmt.Sprintf("POST %s", fakebitbucket.TokenPath) {
 			assert.True(t, answered[route], "TestAnswers sends no request to %s", route)
 		}

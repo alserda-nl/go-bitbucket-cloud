@@ -166,6 +166,7 @@ func (s *Server) record(r *http.Request, credential, route string) (int, bool) {
 		Credential: credential,
 		Route:      route,
 	})
+
 	if len(s.failures) == 0 {
 		return 0, false
 	}

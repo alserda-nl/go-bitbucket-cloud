@@ -319,6 +319,7 @@ func (r *recordingTransport) RoundTrip(req *http.Request) (*http.Response, error
 		r.bodies = append(r.bodies, string(body))
 	}
 	r.requests = append(r.requests, req)
+
 	response := r.responses[min(len(r.requests), len(r.responses))-1]
 	response.Request = req
 
@@ -344,6 +345,7 @@ func TestRetryTransport_KeepsTheCauseTheContextEndedWith(t *testing.T) {
 	cancel(stopped)
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.bitbucket.org/2.0/thing", nil)
 	require.NoError(t, err)
+
 	retries := newRetries(next, 3)
 	retries.firstWait = time.Hour
 
