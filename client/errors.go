@@ -50,7 +50,7 @@ type APIError struct {
 	Detail string
 	// Fields names the fields a 400 refused, with what is wrong with each.
 	Fields map[string][]string
-	// Key names the error in the Pipelines, deployment and runner services:
+	// Key names the error of a branch and of the Pipelines, deployment and runner services:
 	// "variable-service.variable.duplicate", "agent-service.runner.not-found".
 	Key string
 	// Arguments are the values that go with Key, such as the UUID a duplicate variable's error names.
@@ -119,24 +119,27 @@ func (e *APIError) MissingScopes() []string {
 	return missing
 }
 
-// errorAnswer holds every top-level field of Bitbucket's error answers; the fields an answer
-// lacks stay empty. As JSON:
-//   - {"type": "error", "error": {"message", "detail", "fields", "id", "data"}}: the repository
-//     endpoints, a branch error and the Pipelines services, whose data holds their key and arguments;
+// errorAnswer holds every top-level field of Bitbucket's error answers, whose shape differs with
+// the service behind the endpoint; the fields an answer lacks stay empty. The six shapes, as JSON:
+//   - {"type": "error", "error": {"message", "detail", "fields", "id"}}: the repository endpoints;
+//     a branch error adds "data" with its key, in the error and beside it;
+//   - {"error": {"message", "detail", "data"}}: the Pipelines and deployment services, whose data
+//     holds their key and arguments;
 //   - {"key", "message", "arguments"}: the runners;
 //   - {"code", "message"}: a Pipelines 500, whose code repeats its status;
+//   - {"message", "status"}: a removed 1.0 path's 410;
 //   - {"error", "error_description"}: the token address, as RFC 6749, section 5.2, has it.
 //
 // An answer in text, such as a text/html 402, or without a body keeps its text instead.
 type errorAnswer struct {
-	// Error is an object in the repository endpoints' and the Pipelines services' shapes, and
-	// text in an OAuth refusal (RFC 6749, section 5.2).
+	// Error is an object in the repository endpoints' and the Pipelines and deployment services'
+	// shapes, and text in an OAuth refusal (RFC 6749, section 5.2).
 	Error json.RawMessage `json:"error"`
 	// ErrorDescription is an OAuth refusal's description.
 	ErrorDescription string `json:"error_description"`
 	// Key is a runner error's key.
 	Key string `json:"key"`
-	// Message is a runner error's or a Pipelines 500's message.
+	// Message is the message of a runner error, a Pipelines 500 and a 410.
 	Message string `json:"message"`
 	// Arguments are a runner error's arguments.
 	Arguments map[string]any `json:"arguments"`
@@ -255,12 +258,12 @@ func shorten(text string) string {
 	return fmt.Sprintf("%s...", string(runes[:textShown]))
 }
 
-// withoutURL drops the address from an *url.Error: its query can carry a signed token, as a
-// pipeline cache's download address does.
+// withoutURL drops the address of every *url.Error in err: its query can carry a signed token, as
+// a pipeline cache's download address does.
 func withoutURL(err error) error {
 	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
-		return urlErr.Err
+	for errors.As(err, &urlErr) && urlErr.Err != nil {
+		err = urlErr.Err
 	}
 
 	return err

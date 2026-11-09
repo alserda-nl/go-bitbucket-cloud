@@ -13,8 +13,9 @@ type loginSettings struct {
 	next http.RoundTripper
 	// endpoint is the API's address: only a request to its scheme and host gets the credential.
 	endpoint *url.URL
-	// tokenURL and tokenTransport are where and through what an OAuth consumer asks for its token.
-	tokenURL       string
+	// tokenURL is where an OAuth consumer asks for its access token.
+	tokenURL string
+	// tokenTransport sends the token request, with retries of its own.
 	tokenTransport http.RoundTripper
 }
 

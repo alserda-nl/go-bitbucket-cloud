@@ -71,7 +71,10 @@ func list[T any](ctx context.Context, c *Client, segments []string, largestPage 
 	}
 
 	var items []T
+	fetched := map[string]bool{}
 	for address, pageNumber := first, 1; ; pageNumber++ {
+		fetched[address.String()] = true
+
 		var current page[T]
 		if err := c.send(ctx, http.MethodGet, address, nil, &current); err != nil {
 			return nil, onPage(err, pageNumber)
@@ -88,6 +91,10 @@ func list[T any](ctx context.Context, c *Client, segments []string, largestPage 
 		next, err := c.nextPage(first, current.Next)
 		if err != nil {
 			return nil, err
+		}
+		// A next link to a page the list already gave would repeat the same requests until ctx ends.
+		if fetched[next.String()] {
+			return nil, fmt.Errorf("bitbucket: the list %s answered a next link to a page it already gave, %q", first.EscapedPath(), current.Next)
 		}
 
 		address = next

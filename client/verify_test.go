@@ -219,3 +219,33 @@ func TestVerify_NamesTheMismatchTheCheckReported(t *testing.T) {
 	assert.EqualError(t, err, `bitbucket: the object did not read back as expected (reads: 3): name is "old", want "new"`)
 	assert.Equal(t, 3, reads, "Verify should read again after a mismatch")
 }
+
+func TestVerify_StopsAtAFailedLoginOrAnOptionOutOfRange(t *testing.T) {
+	cases := []struct {
+		name    string
+		failure error
+	}{
+		{
+			name:    "a refused login",
+			failure: fmt.Errorf("%w: invalid_client", ErrLogin),
+		},
+		{
+			name:    "an option out of range",
+			failure: fmt.Errorf("%w: a page size of 0", ErrInvalidOption),
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			reads := 0
+
+			err := Verify(t.Context(), func(context.Context) (bool, error) {
+				reads++
+				return false, testCase.failure
+			}, WithInterval(0))
+
+			assert.ErrorIs(t, err, ErrNotVerified, "Verify should end without a match after %s", testCase.name)
+			assert.Equal(t, 1, reads, "Verify should not read again after %s", testCase.name)
+		})
+	}
+}

@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	// defaultVerifyInterval and defaultVerifyMaxAttempts wait about a minute, longer than the 38
-	// seconds a new project was seen answering 404, in at most 20 requests per object.
+	// defaultVerifyInterval and defaultVerifyMaxAttempts wait about a minute, in at most 20 requests
+	// per object: a new project can answer 404 for 38 seconds and more after its create.
 	defaultVerifyInterval    = 3 * time.Second
 	defaultVerifyMaxAttempts = 20
 )
@@ -39,17 +39,11 @@ func WithMaxAttempts(maxAttempts int) VerifyOption {
 	return func(s *verifySettings) { s.maxAttempts = maxAttempts }
 }
 
-// Verify reads until check says the object is there as expected: the first read at once, then one
-// every interval, at most maxAttempts reads. Bitbucket's answers cannot be trusted right after a
-// write: a new project can answer 404 for 38 seconds and more.
-//
-// check returns true when the read matched, false to read again (a value not there yet), or an
-// error. A check that finds a value other than the one written can return false with an error
-// that names it ("name is \"old\", want \"new\""): Verify reads again, and names the last one. After a 404, which a new object answers for a while, a 429, a 5xx or a read that got no
-// answer, Verify reads again; another answer of 400 or above, which no later read changes, ends the
-// reads at once. When the reads end, the reads run out or ctx ends, Verify returns an error that
-// matches ErrNotVerified. It names the last read's error but does not wrap it, so a 404 at the end
-// is not taken for a missing object.
+// Verify reads until check says the object is there as expected, at once and then every interval,
+// at most maxAttempts reads, since Bitbucket can show an old state for a while after a write.
+// check returns true for a match, or false, with an error naming what it found if it likes, to
+// read again. A 4xx other than 404 and 429, a refused login or an option out of range ends the
+// reads early. Without a match the error matches ErrNotVerified and names the last error unwrapped.
 func Verify(ctx context.Context, check func(context.Context) (bool, error), opts ...VerifyOption) error {
 	settings := verifySettings{
 		interval:    defaultVerifyInterval,
@@ -84,8 +78,13 @@ func Verify(ctx context.Context, check func(context.Context) (bool, error), opts
 }
 
 // readAgain reports whether a later read can answer otherwise than a read that failed with err: a
-// 404, a 429 and a 5xx can, as can a read that got no answer.
+// 404, a 429, a 5xx and a read that got no answer can; a refused login and an option out of range
+// cannot, nor can any other answer of 400 or above.
 func readAgain(err error) bool {
+	if errors.Is(err, ErrLogin) || errors.Is(err, ErrInvalidOption) {
+		return false
+	}
+
 	var apiErr *APIError
 	if !errors.As(err, &apiErr) {
 		return true

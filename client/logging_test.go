@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -91,4 +92,25 @@ func TestLevelOf_WarnsOfTheAttemptsTheRetriesAreFor(t *testing.T) {
 			assert.Equal(t, testCase.expected, actual, "levelOf(%d)", testCase.status)
 		})
 	}
+}
+
+func TestLoggingTransport_LogsAFailedAttemptWithoutItsAddress(t *testing.T) {
+	var output bytes.Buffer
+	logging := &loggingTransport{
+		next: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return nil, &url.Error{
+				Op:  "Get",
+				URL: "https://x/?signature=secret",
+				Err: errors.New("connection reset"),
+			}
+		}),
+		logger: slog.New(slog.NewTextHandler(&output, &slog.HandlerOptions{Level: slog.LevelDebug})),
+	}
+	request, err := http.NewRequest(http.MethodGet, "https://api.bitbucket.org/2.0/user", nil)
+	require.NoError(t, err)
+
+	_, _ = logging.RoundTrip(request)
+
+	assert.Contains(t, output.String(), `error="connection reset"`)
+	assert.NotContains(t, output.String(), "secret")
 }

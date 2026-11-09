@@ -68,6 +68,14 @@ func TestNew_RefusesAnIncompleteConfiguration(t *testing.T) {
 			options: []Option{WithEndpoint("http://api.bitbucket.org")},
 		},
 		{
+			name:    "an endpoint with a user and password",
+			options: []Option{WithEndpoint("https://user:secret@example.com")},
+		},
+		{
+			name:    "a token address with a key and secret",
+			options: []Option{WithOAuthTokenURL("https://key:secret@example.com/site/oauth2/access_token")},
+		},
+		{
 			name:    "a token address over http on another machine",
 			options: []Option{WithOAuthTokenURL("http://bitbucket.org/site/oauth2/access_token")},
 		},
@@ -177,4 +185,11 @@ func TestNew_SaysWhichPartOfACredentialIsEmpty(t *testing.T) {
 			assert.EqualError(t, err, testCase.expected, "New should name the empty part of %s", testCase.name)
 		})
 	}
+}
+
+func TestNew_RefusesAnAddressWithAPasswordWithoutShowingIt(t *testing.T) {
+	_, err := New(nil, WithEndpoint("https://user:secret@example.com"))
+
+	assert.ErrorIs(t, err, ErrInvalidConfig)
+	assert.NotContains(t, err.Error(), "secret", "the error should hide the address's password")
 }

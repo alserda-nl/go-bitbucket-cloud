@@ -325,3 +325,21 @@ func TestWithoutURL_KeepsAnErrorWithoutAnAddress(t *testing.T) {
 		Err: plain,
 	}))
 }
+
+func TestWithoutURL_DropsEveryAddressInTheChain(t *testing.T) {
+	cause := errors.New("connection reset")
+	nested := &url.Error{
+		Op:  "Get",
+		URL: "https://x/?signature=outer",
+		Err: fmt.Errorf("proxy: %w", &url.Error{
+			Op:  "Get",
+			URL: "https://y/?signature=inner",
+			Err: cause,
+		}),
+	}
+
+	actual := withoutURL(nested)
+
+	assert.Equal(t, cause, actual)
+	assert.NotContains(t, actual.Error(), "signature")
+}

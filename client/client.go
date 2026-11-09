@@ -195,12 +195,16 @@ func defaultTransport() http.RoundTripper {
 	return transport
 }
 
-// parseAddress checks that address is an absolute http or https address without a query, and that
-// an http one goes to this machine: the credential goes to it unencrypted, as it does to the fake.
+// parseAddress checks that address is an absolute http or https address without a query or a
+// user, and that an http one goes to this machine: the credential goes to it unencrypted, as it does
+// to the fake. A user and password in the address would show in every error that names it.
 func parseAddress(name, address string) (*url.URL, error) {
 	parsed, err := url.Parse(address)
 	if err != nil {
 		return nil, fmt.Errorf("%w: the %s %q is not an address: %w", ErrInvalidConfig, name, address, err)
+	}
+	if parsed.User != nil {
+		return nil, fmt.Errorf("%w: the %s %q holds a user or password; give the credential to New instead", ErrInvalidConfig, name, parsed.Redacted())
 	}
 	if (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" || parsed.RawQuery != "" {
 		return nil, fmt.Errorf("%w: the %s %q is not an http or https address without a query", ErrInvalidConfig, name, address)

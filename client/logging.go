@@ -17,7 +17,7 @@ type loggingTransport struct {
 	logger *slog.Logger
 }
 
-// RoundTrip sends the request and logs the attempt at debug level.
+// RoundTrip sends the request and logs the attempt, at the level levelOf picks.
 func (l *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	start := time.Now()
 	response, err := l.next.RoundTrip(req)
@@ -30,7 +30,7 @@ func (l *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 		slog.Duration("duration", time.Since(start)),
 	}
 	if err != nil {
-		attributes = append(attributes, slog.String("error", err.Error()))
+		attributes = append(attributes, slog.String("error", withoutURL(err).Error()))
 	} else {
 		attributes = append(attributes, slog.Int("status", response.StatusCode))
 	}

@@ -91,6 +91,11 @@ func TestList_RefusesANextLinkItCannotFollow(t *testing.T) {
 			expected: `bitbucket: the list /2.0/things answered a next link outside its API without a page number, "/rest/1.0/x?page=0"`,
 		},
 		{
+			name:     "to the page it just gave",
+			next:     "https://api.bitbucket.org/2.0/things?pagelen=100",
+			expected: `bitbucket: the list /2.0/things answered a next link to a page it already gave, "https://api.bitbucket.org/2.0/things?pagelen=100"`,
+		},
+		{
 			name:     "not an address",
 			next:     "%zz",
 			expected: `bitbucket: the list /2.0/things answered a next link that is not an address, "%zz": parse "%zz": invalid URL escape "%zz"`,
