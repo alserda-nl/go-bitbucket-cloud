@@ -22,9 +22,9 @@ type loginSettings struct {
 // withoutCredentialKey marks a context whose request goes without a credential.
 type withoutCredentialKey struct{}
 
-// withoutCredential marks a call that Bitbucket refuses with every API token but answers without
-// a credential: the two webhook event lists and the Pipelines OpenID Connect configuration and
-// keys.
+// withoutCredential returns a context whose call goes without the credential, for the calls
+// Bitbucket refuses with every API token but answers without one: the two webhook event lists and
+// the Pipelines OpenID Connect configuration and keys.
 func withoutCredential(ctx context.Context) context.Context {
 	return context.WithValue(ctx, withoutCredentialKey{}, true)
 }
@@ -57,7 +57,8 @@ type basicLogin struct {
 	token string
 }
 
-// RoundTrip adds the credential to a copy of the request, as the http.RoundTripper contract asks.
+// RoundTrip adds the API token to a copy of a request that gets the credential, as
+// http.RoundTripper asks, and sends any other request as it is.
 func (l *basicLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 	if !getsCredential(req, l.endpoint) {
 		return l.next.RoundTrip(req)

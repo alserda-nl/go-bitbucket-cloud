@@ -14,14 +14,15 @@ import (
 // apiVersion is the version of Bitbucket's REST API the calls go to.
 const apiVersion = "2.0"
 
-// apiPath returns the segments of a 2.0 API path.
+// apiPath returns the segments of a path in Bitbucket's 2.0 API:
+// apiPath("workspaces", "acme") returns ["2.0", "workspaces", "acme"].
 func apiPath(segments ...string) []string {
 	return append([]string{apiVersion}, segments...)
 }
 
-// apiURL returns the address of a call: the endpoint, then the path's segments, each escaped, so
-// a UUID's braces go as %7B and %7D, then the query. An empty segment, "." or ".." would make the
-// call ask for another path, so it is refused.
+// apiURL returns the address of a call on the client's endpoint, each segment escaped:
+// ["2.0", "workspaces", "{abc}"] gives https://api.bitbucket.org/2.0/workspaces/%7Babc%7D. An
+// empty segment, "." or ".." would make the call ask for another path, so it is refused.
 func (c *Client) apiURL(segments []string, query url.Values) (*url.URL, error) {
 	escaped := make([]string, len(segments))
 	for i, segment := range segments {
@@ -40,7 +41,8 @@ func (c *Client) apiURL(segments []string, query url.Values) (*url.URL, error) {
 	return &address, nil
 }
 
-// callFor sends a call and returns its answer decoded as a T.
+// callFor sends a call to the API path made of segments, with body as JSON unless it is nil, and
+// returns the answer decoded as a T.
 func callFor[T any](ctx context.Context, c *Client, method string, segments []string, body any) (*T, error) {
 	var answer T
 	if err := c.call(ctx, method, segments, nil, body, &answer); err != nil {
@@ -112,7 +114,8 @@ func (c *Client) send(ctx context.Context, method string, address *url.URL, body
 	return nil
 }
 
-// describeAnswer names an answer by its status and, when it has one, its content type, never its body.
+// describeAnswer names an answer by its status and its content type, if any, never by its body:
+// "the 200 answer (text/html)".
 func describeAnswer(response *http.Response) string {
 	if contentType := response.Header.Get("Content-Type"); contentType != "" {
 		return fmt.Sprintf("the %d answer (%s)", response.StatusCode, contentType)

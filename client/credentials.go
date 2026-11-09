@@ -26,7 +26,8 @@ type APIToken struct {
 }
 
 // OAuthConsumer is a workspace's OAuth consumer: the Client trades its key and secret for an
-// access token with the client credentials grant.
+// access token with the client credentials grant, and asks for a new token when the old one
+// expires or a call answers 401.
 type OAuthConsumer struct {
 	// Key is the consumer's key, from the workspace's OAuth consumer settings.
 	Key string
@@ -37,36 +38,39 @@ type OAuthConsumer struct {
 // hidden stands in for a token or a secret wherever a credential is printed or logged.
 const hidden = "(hidden)"
 
-// String shows the email address and hides the token, so printing a credential shows no secret.
+// String shows the email address and hides the token, so printing a credential shows no secret:
+// APIToken{Email: someone@example.com, Token: (hidden)}.
 func (a APIToken) String() string {
 	return fmt.Sprintf("APIToken{Email: %s, Token: %s}", a.Email, hidden)
 }
 
-// GoString is String, for %#v.
+// GoString returns String's text, so %#v hides the token too.
 func (a APIToken) GoString() string {
 	return a.String()
 }
 
-// LogValue logs the email address and hides the token.
+// LogValue makes slog log the email address and hide the token.
 func (a APIToken) LogValue() slog.Value {
 	return slog.GroupValue(slog.String("email", a.Email), slog.String("token", hidden))
 }
 
-// String shows the key and hides the secret, so printing a credential shows no secret.
+// String shows the key and hides the secret, so printing a credential shows no secret:
+// OAuthConsumer{Key: abc, Secret: (hidden)}.
 func (o OAuthConsumer) String() string {
 	return fmt.Sprintf("OAuthConsumer{Key: %s, Secret: %s}", o.Key, hidden)
 }
 
-// GoString is String, for %#v.
+// GoString returns String's text, so %#v hides the secret too.
 func (o OAuthConsumer) GoString() string {
 	return o.String()
 }
 
-// LogValue logs the key and hides the secret.
+// LogValue makes slog log the key and hide the secret.
 func (o OAuthConsumer) LogValue() slog.Value {
 	return slog.GroupValue(slog.String("key", o.Key), slog.String("secret", hidden))
 }
 
+// check refuses an API token without an email address or without the token itself.
 func (a APIToken) check() error {
 	if a.Email == "" {
 		return fmt.Errorf("%w: the API token's email address is empty", ErrInvalidConfig)
@@ -78,6 +82,7 @@ func (a APIToken) check() error {
 	return nil
 }
 
+// newLogin returns the transport that sends the token as Basic authentication.
 func (a APIToken) newLogin(login loginSettings) http.RoundTripper {
 	return &basicLogin{
 		next:     login.next,
@@ -87,6 +92,7 @@ func (a APIToken) newLogin(login loginSettings) http.RoundTripper {
 	}
 }
 
+// check refuses an OAuth consumer without a key or without a secret.
 func (o OAuthConsumer) check() error {
 	if o.Key == "" {
 		return fmt.Errorf("%w: the OAuth consumer's key is empty", ErrInvalidConfig)
@@ -98,6 +104,7 @@ func (o OAuthConsumer) check() error {
 	return nil
 }
 
+// newLogin returns the transport that sends an access token, asked for at login's token address.
 func (o OAuthConsumer) newLogin(login loginSettings) http.RoundTripper {
 	return &bearerLogin{
 		next:     login.next,

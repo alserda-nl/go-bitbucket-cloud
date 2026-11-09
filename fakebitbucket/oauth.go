@@ -6,11 +6,14 @@ import (
 	"net/http"
 )
 
+// tokenSample is the token address's answer that handleToken gives, with an access token of its
+// own in it.
+//
 //go:embed samples/oauth-token.json
 var tokenSample []byte
 
-// oauthRefusal is a refusal of the token address, as RFC 6749, section 5.2, describes one;
-// Bitbucket's own is not recorded.
+// oauthRefusal is a refusal of the token address as RFC 6749, section 5.2, describes one, which
+// may differ from Bitbucket's own.
 type oauthRefusal struct {
 	// Error is the refusal's code, such as invalid_client.
 	Error string `json:"error"`
@@ -18,8 +21,8 @@ type oauthRefusal struct {
 	ErrorDescription string `json:"error_description"`
 }
 
-// ExpireTokens makes every access token the token address issued answer 401, as Bitbucket's do
-// after an hour.
+// ExpireTokens makes the fake refuse every access token it issued with 401, as Bitbucket refuses
+// its own after an hour.
 func (s *Server) ExpireTokens() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -27,8 +30,9 @@ func (s *Server) ExpireTokens() {
 	s.tokens = map[string]bool{}
 }
 
-// handleToken answers the client credentials grant: a POST of grant_type=client_credentials with
-// the consumer's key and secret as Basic authentication.
+// handleToken answers the client credentials grant, a POST of grant_type=client_credentials with
+// the consumer's key and secret as Basic authentication, with an access token the fake takes until
+// ExpireTokens.
 func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	key, secret, ok := r.BasicAuth()
 	if !ok || key != OAuthKey || secret != OAuthSecret {
@@ -53,6 +57,7 @@ func (s *Server) handleToken(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, answer)
 }
 
+// issueToken returns an access token the fake never issued before, and takes it from then on.
 func (s *Server) issueToken() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()

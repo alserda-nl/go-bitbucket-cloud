@@ -12,31 +12,31 @@ import (
 	"strings"
 )
 
-const (
-	// jsonMediaType is the media type of the bodies the API takes and gives.
-	jsonMediaType = "application/json"
-	// textShown is how many characters of an answer that is not JSON an error's text shows: some,
-	// such as a 402 for a repository's downloads, are a whole HTML page.
-	textShown = 300
-)
+// jsonMediaType is the media type of the bodies the API takes and gives.
+const jsonMediaType = "application/json"
 
-// Sentinel errors, matched with errors.Is.
+// textShown is how many characters of an answer that is not JSON an error's text shows: some, such
+// as a 402 for a repository's downloads, are a whole HTML page.
+const textShown = 300
+
+// The errors to match with errors.Is.
 var (
-	// ErrInvalidConfig is returned by New for a credential that misses a part or an option out of range.
+	// ErrInvalidConfig is New's error for a credential with an empty part or an option it cannot use.
 	ErrInvalidConfig = errors.New("bitbucket: invalid client configuration")
-	// ErrInvalidOption is returned by a call given an option out of range, before any request.
+	// ErrInvalidOption is the error of a call, or of Verify, given an option out of range, such as
+	// WithLimit(0); no request is sent.
 	ErrInvalidOption = errors.New("bitbucket: invalid option")
 	// ErrNotFound matches every 404, whatever its shape. A "not found" that Bitbucket answers with
 	// 400, such as stopping a pipeline run that does not exist, does not match it.
 	ErrNotFound = errors.New("bitbucket: not found")
-	// ErrLogin is returned when the OAuth consumer gets no access token. It never matches
+	// ErrLogin is a call's error when its OAuth consumer gets no access token. It never matches
 	// ErrNotFound: a 404 from the token address says nothing about the object a call asked for.
-	// Its text has no "bitbucket:" of its own, as the call's error around it starts with one.
 	ErrLogin = errors.New("logging in with the OAuth consumer failed")
 )
 
-// APIError is Bitbucket's answer to a call when its status is 400 or above. Its error answers
-// differ with the service behind the endpoint; APIError keeps what a caller can use from each.
+// APIError is Bitbucket's answer to a call when its status is 400 or above; errors.As finds it in
+// a call's error. Bitbucket's error answers differ with the service behind the endpoint, and
+// APIError keeps what a caller can use from each.
 type APIError struct {
 	// Method is the call's HTTP method.
 	Method string
@@ -67,8 +67,9 @@ type APIError struct {
 	Text string
 }
 
-// Error returns the call, the status, Bitbucket's words, on a 403 for a scope the scopes the
-// credential misses, a 500's error ID, and how often the call was sent when it was more than once.
+// Error describes the call and Bitbucket's answer in one line, with the scopes a 403 says the
+// credential misses, a 500's error ID and the attempts when there was more than one:
+// "bitbucket: GET /2.0/workspaces/acme: 503 Service Unavailable (after 4 attempts)".
 func (e *APIError) Error() string {
 	return fmt.Sprintf("bitbucket: %s", e.describe())
 }
@@ -107,7 +108,8 @@ func (e *APIError) Is(target error) bool {
 	return target == ErrNotFound && e.StatusCode == http.StatusNotFound
 }
 
-// MissingScopes returns the scopes a 403 required that the credential was not granted.
+// MissingScopes returns the scopes a 403 says the call needs and the credential was not granted,
+// such as read:project:bitbucket; for any other answer, none.
 func (e *APIError) MissingScopes() []string {
 	var missing []string
 	for _, scope := range e.RequiredScopes {
@@ -123,25 +125,26 @@ func (e *APIError) MissingScopes() []string {
 // the service behind the endpoint; the fields an answer lacks stay empty. The six shapes, as JSON:
 //   - {"type": "error", "error": {"message", "detail", "fields", "id"}}: the repository endpoints;
 //     a branch error adds "data" with its key, in the error and beside it;
-//   - {"error": {"message", "detail", "data"}}: the Pipelines and deployment services, whose data
-//     holds their key and arguments;
-//   - {"key", "message", "arguments"}: the runners;
+//   - {"error": {"message", "detail", "data"}}: the Pipelines services, a deployment environment's
+//     variables included, whose data holds their key and arguments;
+//   - {"key", "message", "arguments"}: deployments, deployment environments and runners;
 //   - {"code", "message"}: a Pipelines 500, whose code repeats its status;
 //   - {"message", "status"}: a removed 1.0 path's 410;
 //   - {"error", "error_description"}: the token address, as RFC 6749, section 5.2, has it.
 //
 // An answer in text, such as a text/html 402, or without a body keeps its text instead.
 type errorAnswer struct {
-	// Error is an object in the repository endpoints' and the Pipelines and deployment services'
-	// shapes, and text in an OAuth refusal (RFC 6749, section 5.2).
+	// Error is an object in the repository endpoints' and the Pipelines services' shapes, and text
+	// in an OAuth refusal (RFC 6749, section 5.2).
 	Error json.RawMessage `json:"error"`
 	// ErrorDescription is an OAuth refusal's description.
 	ErrorDescription string `json:"error_description"`
-	// Key is a runner error's key.
+	// Key is a deployment's, a deployment environment's or a runner's error key.
 	Key string `json:"key"`
-	// Message is the message of a runner error, a Pipelines 500 and a 410.
+	// Message is the message of a deployment, deployment environment or runner error, a Pipelines
+	// 500 and a 410.
 	Message string `json:"message"`
-	// Arguments are a runner error's arguments.
+	// Arguments are the arguments of a deployment, deployment environment or runner error.
 	Arguments map[string]any `json:"arguments"`
 }
 
@@ -228,7 +231,7 @@ func readErrorObject(apiErr *APIError, object errorObject) {
 	}
 }
 
-// rawText returns a JSON string's text, another JSON value's literal, or nothing for null or no value.
+// rawText returns a JSON string's text, any other JSON value as written, and "" for null or no value.
 func rawText(raw json.RawMessage) string {
 	var text string
 	if err := json.Unmarshal(raw, &text); err == nil {
@@ -248,7 +251,7 @@ func describeFields(fields map[string][]string) string {
 	return strings.Join(described, "; ")
 }
 
-// shorten cuts text to textShown characters.
+// shorten cuts text longer than textShown characters to that many, followed by "...".
 func shorten(text string) string {
 	runes := []rune(text)
 	if len(runes) <= textShown {

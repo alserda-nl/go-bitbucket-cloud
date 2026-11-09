@@ -12,6 +12,7 @@ import (
 // ListOption changes what a list call asks for.
 type ListOption func(*listSettings)
 
+// listSettings is what the ListOptions set.
 type listSettings struct {
 	// pageSize is the page size to ask for.
 	pageSize int
@@ -21,13 +22,14 @@ type listSettings struct {
 	limited bool
 }
 
-// WithPageSize asks for pages of size items; it is at most the list's largest page, which a list
-// call asks for by default.
+// WithPageSize asks for pages of size items instead of the list's largest page, the default. A
+// size below 1 or above the largest page fails with ErrInvalidOption.
 func WithPageSize(size int) ListOption {
 	return func(s *listSettings) { s.pageSize = size }
 }
 
-// WithLimit stops the list after limit items and asks for pages no larger than limit.
+// WithLimit stops the list after limit items and asks for pages no larger than limit. A limit
+// below 1 fails with ErrInvalidOption.
 func WithLimit(limit int) ListOption {
 	return func(s *listSettings) { s.limit, s.limited = limit, true }
 }
@@ -37,8 +39,9 @@ func WithFullWalk() ListOption {
 	return func(s *listSettings) { s.limit, s.limited = 0, false }
 }
 
-// page is the wrapper every list answers with. Only a missing next ends a list: pagelen is the
-// page size in some lists and the number of items on the page in others, so it decides nothing.
+// page is one page of a list as Bitbucket answers it: {"values": [...], "next": "..."}. Only a
+// missing next ends a list: pagelen is the page size in some lists and the number of items on the
+// page in others, so it decides nothing.
 type page[T any] struct {
 	// Values are the page's items.
 	Values []T `json:"values"`
@@ -46,8 +49,9 @@ type page[T any] struct {
 	Next string `json:"next"`
 }
 
-// list fetches the list at the API path made of segments, page by page, asking for pages of the
-// list's largest size unless an option says otherwise.
+// list returns the items of the list at the API path made of segments, following next from page
+// to page, in pages of largestPage items unless an option asks otherwise. An option out of range
+// fails with ErrInvalidOption before any request, and an error on any page fails the whole list.
 func list[T any](ctx context.Context, c *Client, segments []string, largestPage int, opts []ListOption) ([]T, error) {
 	settings := listSettings{pageSize: largestPage}
 	for _, opt := range opts {
@@ -101,8 +105,8 @@ func list[T any](ctx context.Context, c *Client, segments []string, largestPage 
 	}
 }
 
-// onPage adds the page to an error from a list's page after the first, so a failure there does not
-// read like the list's own.
+// onPage names the page in an error from a list's page after the first, as in "(page 3 of the
+// list)", so the failure does not read like the list's own.
 func onPage(err error, pageNumber int) error {
 	if pageNumber == 1 {
 		return err
@@ -111,11 +115,10 @@ func onPage(err error, pageNumber int) error {
 	return fmt.Errorf("%w (page %d of the list)", err, pageNumber)
 }
 
-// nextPage returns the address of a list's next page. A next link into the 2.0 API on the
-// client's own endpoint is followed as given. For any other link it asks the list's own path for
-// the page number the link names: a schedule's executions answer a relative link outside the 2.0
-// API, while ?page=2 on the 2.0 path works. A link without a page number ends the list with an
-// error.
+// nextPage returns the address of a list's next page: next itself when it points into the 2.0 API
+// on the client's own endpoint, and otherwise the list's first address with the page number next
+// names, as a schedule's executions answer a relative link outside the 2.0 API while ?page=2 on
+// the 2.0 path works. A link without a page number fails.
 func (c *Client) nextPage(first *url.URL, next string) (*url.URL, error) {
 	link, err := c.endpoint.Parse(next)
 	if err != nil {

@@ -10,6 +10,8 @@ import (
 	"github.com/alserda-nl/go-bitbucket-cloud/models"
 )
 
+// workspaceSample is Bitbucket's answer for a workspace, which NewWorkspace starts from.
+//
 //go:embed samples/workspace.json
 var workspaceSample []byte
 
@@ -19,13 +21,15 @@ type WorkspaceOption func(*models.Workspace)
 // WorkspaceOptionSet holds the options of NewWorkspace: fakebitbucket.Workspace.WithSlug("acme").
 type WorkspaceOptionSet struct{}
 
-// Workspace is NewWorkspace's options.
+// Workspace is how a test reaches NewWorkspace's options:
+// NewWorkspace(fakebitbucket.Workspace.WithSlug("acme")).
 //
 //nolint:gochecknoglobals // the options' namespace: fakebitbucket.Workspace.WithSlug
 var Workspace WorkspaceOptionSet
 
-// NewWorkspace returns a workspace as Bitbucket answers one, with a slug, a name and a UUID no
-// other builder call returns. A workspace's name need not be its slug.
+// NewWorkspace returns a private workspace as Bitbucket answers one, with a slug, a name and a
+// UUID no other builder call returns; the name differs from the slug, as it may in Bitbucket. It
+// stores nothing: SeedWorkspace puts it in a fake.
 func NewWorkspace(opts ...WorkspaceOption) models.Workspace {
 	var workspace models.Workspace
 	decodeSample(workspaceSample, &workspace)
@@ -49,7 +53,8 @@ func (WorkspaceOptionSet) WithSlug(slug string) WorkspaceOption {
 	return func(w *models.Workspace) { w.Slug = slug }
 }
 
-// SeedWorkspace stores a workspace, as if it existed in Bitbucket, and returns it.
+// SeedWorkspace stores a workspace, as if it existed in Bitbucket, and returns it; it takes the
+// place of a workspace stored before with the same slug.
 func (s *Server) SeedWorkspace(workspace models.Workspace) models.Workspace {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -59,8 +64,8 @@ func (s *Server) SeedWorkspace(workspace models.Workspace) models.Workspace {
 	return workspace
 }
 
-// workspaceRoute serves a route under /2.0/workspaces/{workspace}: it holds the lock, finds the
-// workspace by its slug or its UUID in braces, and answers as Bitbucket does when there is none.
+// workspaceRoute serves a route under /2.0/workspaces/{workspace}: handle gets the workspace the
+// path names, with the lock held, and a workspace that is not there answers Bitbucket's 404.
 func (s *Server) workspaceRoute(handle func(http.ResponseWriter, *http.Request, models.Workspace)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
@@ -76,6 +81,8 @@ func (s *Server) workspaceRoute(handle func(http.ResponseWriter, *http.Request, 
 	}
 }
 
+// handleGetWorkspace answers the workspace to any request, as Bitbucket answers a private
+// workspace's details without a credential too.
 func handleGetWorkspace(w http.ResponseWriter, _ *http.Request, workspace models.Workspace) {
 	writeJSON(w, http.StatusOK, workspace)
 }
@@ -95,12 +102,14 @@ func (s *Server) findWorkspace(identifier string) (models.Workspace, bool) {
 	return models.Workspace{}, false
 }
 
-// writeWorkspaceNotFound answers as Bitbucket answers a workspace that does not exist.
+// writeWorkspaceNotFound answers as Bitbucket answers a workspace that does not exist: 404
+// "No workspace with identifier 'nobody'.".
 func writeWorkspaceNotFound(w http.ResponseWriter, identifier string) {
 	writeError(w, http.StatusNotFound, fmt.Sprintf("No workspace with identifier '%s'.", identifier))
 }
 
-// workspaceLinks returns a workspace's links as Bitbucket writes them.
+// workspaceLinks returns a workspace's links as Bitbucket writes them: for "acme" its Self is
+// https://api.bitbucket.org/2.0/workspaces/acme.
 func workspaceLinks(slug string) models.WorkspaceLinks {
 	api := fmt.Sprintf("%s/workspaces/%s", apiAddress, slug)
 
@@ -142,6 +151,7 @@ type referenceLinks struct {
 	Self models.Link `json:"self"`
 }
 
+// workspaceReferenceTo returns workspace in the short form Bitbucket embeds in a project.
 func workspaceReferenceTo(workspace models.Workspace) workspaceReference {
 	return workspaceReference{
 		Links: referenceLinks{
@@ -171,6 +181,7 @@ type teamReference struct {
 	UUID models.UUID `json:"uuid"`
 }
 
+// teamReferenceTo returns account in the short form Bitbucket embeds as a project's owner.
 func teamReferenceTo(account models.Account) teamReference {
 	return teamReference{
 		DisplayName: account.DisplayName,

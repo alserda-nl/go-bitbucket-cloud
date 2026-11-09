@@ -8,9 +8,9 @@ import (
 	"time"
 )
 
+// Verify's defaults wait about a minute, in at most 20 requests per object: a new project can
+// answer 404 for 38 seconds and more after its create.
 const (
-	// defaultVerifyInterval and defaultVerifyMaxAttempts wait about a minute, in at most 20 requests
-	// per object: a new project can answer 404 for 38 seconds and more after its create.
 	defaultVerifyInterval    = 3 * time.Second
 	defaultVerifyMaxAttempts = 20
 )
@@ -22,6 +22,7 @@ var ErrNotVerified = errors.New("bitbucket: the object did not read back as expe
 // VerifyOption changes how Verify reads.
 type VerifyOption func(*verifySettings)
 
+// verifySettings is what the VerifyOptions set.
 type verifySettings struct {
 	// interval is the time between two reads.
 	interval time.Duration
@@ -29,21 +30,28 @@ type verifySettings struct {
 	maxAttempts int
 }
 
-// WithInterval sets the time between two reads, 3 seconds by default.
+// WithInterval sets the time between two reads, 3 seconds by default. A negative interval fails
+// with ErrInvalidOption.
 func WithInterval(interval time.Duration) VerifyOption {
 	return func(s *verifySettings) { s.interval = interval }
 }
 
-// WithMaxAttempts sets how many reads Verify makes at most, 20 by default.
+// WithMaxAttempts sets how many reads Verify makes at most, 20 by default. Fewer than 1 fails with
+// ErrInvalidOption.
 func WithMaxAttempts(maxAttempts int) VerifyOption {
 	return func(s *verifySettings) { s.maxAttempts = maxAttempts }
 }
 
-// Verify reads until check says the object is there as expected, at once and then every interval,
-// at most maxAttempts reads, since Bitbucket can show an old state for a while after a write.
-// check returns true for a match, or false, with an error naming what it found if it likes, to
-// read again. A 4xx other than 404 and 429, a refused login or an option out of range ends the
-// reads early. Without a match the error matches ErrNotVerified and names the last error unwrapped.
+// Verify calls check until it reports a match, since Bitbucket can show an old state for a while
+// after a write: at once, then every 3 seconds, at most 20 times unless an option says otherwise.
+// A false or an error from check reads again, but an error a later read cannot change, such as a
+// 403 or a refused login, ends the reads. Without a match the error matches ErrNotVerified and
+// holds the last error as text only, so a final 404 does not read as a missing object:
+//
+//	err := client.Verify(ctx, func(ctx context.Context) (bool, error) {
+//		project, err := c.Projects.Get(ctx, "acme", "ABC")
+//		return err == nil && project.Name == "Website", err
+//	})
 func Verify(ctx context.Context, check func(context.Context) (bool, error), opts ...VerifyOption) error {
 	settings := verifySettings{
 		interval:    defaultVerifyInterval,

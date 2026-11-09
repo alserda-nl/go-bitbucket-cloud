@@ -13,7 +13,8 @@ import (
 	"github.com/alserda-nl/go-bitbucket-cloud/models"
 )
 
-// The credentials the fake takes: an API token and an OAuth consumer. It refuses any other with 401.
+// The credentials the fake takes, an API token and an OAuth consumer, such as
+// client.APIToken{Email: Email, Token: APIToken}. It refuses any other with 401.
 //
 //nolint:gosec // the fake's own made-up credentials
 const (
@@ -32,7 +33,8 @@ const (
 	webAddress = "https://bitbucket.org"
 )
 
-// The kinds of credential a Request can carry.
+// The kinds of credential a Request can carry, told apart by its Authorization header: none, a
+// Bearer token, or any other, such as an API token's Basic authentication.
 const (
 	CredentialNone   = ""
 	CredentialBasic  = "basic"
@@ -79,7 +81,8 @@ type Server struct {
 	requests []Request
 }
 
-// New starts a fake Bitbucket that t stops when the test ends.
+// New starts an empty fake Bitbucket that t stops when the test ends; SeedWorkspace and
+// SeedProject fill it.
 func New(t testing.TB) *Server {
 	t.Helper()
 
@@ -101,8 +104,8 @@ func New(t testing.TB) *Server {
 	return server
 }
 
-// routes returns every route the fake serves, by its pattern. TestAnswers sends each of them a
-// request and can write the answers to a file, which the maintainers compare with Bitbucket's.
+// routes returns every route the fake serves, by its pattern; TestAnswers sends each one a
+// request, so no route escapes the comparison of the fake's answers with Bitbucket's.
 func (s *Server) routes() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
 		fmt.Sprintf("POST %s", TokenPath):                        s.handleToken,
@@ -112,8 +115,8 @@ func (s *Server) routes() map[string]http.HandlerFunc {
 	}
 }
 
-// FailNext answers the next requests, as many as times, with status, before checking their
-// credential: the fake's own error answer, for testing retries.
+// FailNext answers the next requests with status, as many as times, before it checks their
+// credential, for testing retries: FailNext(503, 2) fails the next two requests with a 503.
 func (s *Server) FailNext(status, times int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -121,7 +124,7 @@ func (s *Server) FailNext(status, times int) {
 	s.failures = append(s.failures, slices.Repeat([]int{status}, times)...)
 }
 
-// Requests returns every request the fake received, the first first.
+// Requests returns every request the fake received, in the order they came.
 func (s *Server) Requests() []Request {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -151,7 +154,7 @@ func (s *Server) intercept(routes *http.ServeMux) http.Handler {
 	})
 }
 
-// record logs a request and pops the failure FailNext asked for, if any.
+// record keeps a request for Requests and returns the status FailNext asked for it, if any.
 func (s *Server) record(r *http.Request, credential, route string) (int, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -187,6 +190,7 @@ func (s *Server) accepts(r *http.Request) bool {
 	return s.tokens[token]
 }
 
+// credentialOf returns the kind of credential a request carries, one of the Credential constants.
 func credentialOf(r *http.Request) string {
 	authorization := r.Header.Get("Authorization")
 	switch {
@@ -205,6 +209,8 @@ func visible(r *http.Request, isPrivate bool) bool {
 	return !isPrivate || credentialOf(r) != CredentialNone
 }
 
+// handleNoRoute answers a path the fake has no route for with 501, so a call to a wrong address
+// fails instead of looking like a 404.
 func handleNoRoute(w http.ResponseWriter, r *http.Request) {
 	writeError(w, http.StatusNotImplemented, fmt.Sprintf("fakebitbucket has no route for %s %s", r.Method, r.URL.EscapedPath()))
 }

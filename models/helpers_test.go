@@ -19,8 +19,9 @@ func readSample(t *testing.T, name string) []byte {
 	return sample
 }
 
-// missingFields encodes decoded again and returns every field of sample it lost, or holds as
-// another JSON type. Fields only decoded has are fine: a short form leaves fields zero.
+// missingFields returns each field of sample that the model decoded from it does not give back,
+// or gives back as another JSON type: ".links.self: missing". A field only the model has is fine,
+// as a short form leaves fields zero.
 func missingFields(t *testing.T, sample []byte, decoded any) []string {
 	t.Helper()
 

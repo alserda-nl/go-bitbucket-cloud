@@ -14,7 +14,8 @@ import (
 // longestWait caps the doubling wait between two attempts.
 const longestWait = 5 * time.Second
 
-// attemptKey carries an attempt's number in its request's context, for the log.
+// attemptKey carries an attempt's number in its request's context, for the log and for
+// APIError.Attempts.
 type attemptKey struct{}
 
 // retryTransport tries a request again after a 429, 500, 502, 503 or 504, at most maxRetries
@@ -34,8 +35,8 @@ type retryTransport struct {
 	randFloat func() float64
 }
 
-// RoundTrip sends the request and tries it again while the answer allows it, waiting between the
-// attempts until the request's context is done.
+// RoundTrip sends the request, again while the answer allows it, and returns the last answer; a
+// context that ends during a wait fails it.
 func (r *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	for attempt := 1; ; attempt++ {
 		response, err := r.next.RoundTrip(req.WithContext(context.WithValue(req.Context(), attemptKey{}, attempt)))
@@ -101,7 +102,8 @@ func (r *retryTransport) waitFor(attempt int, response *http.Response) time.Dura
 // longestRetryAfter is the most seconds a time.Duration holds; a Retry-After above it is unusable.
 const longestRetryAfter = math.MaxInt64 / int64(time.Second)
 
-// retryAfter reads a Retry-After header in either of its forms, seconds or an HTTP date.
+// retryAfter reads a Retry-After header in either of its forms: "120" is 2 minutes, and an HTTP
+// date is the time until then, 0 once it has passed. It reports false for a header it cannot use.
 func retryAfter(header string) (time.Duration, bool) {
 	if seconds, err := strconv.ParseInt(header, 10, 64); err == nil && seconds >= 0 && seconds <= longestRetryAfter {
 		return time.Duration(seconds) * time.Second, true
@@ -113,7 +115,7 @@ func retryAfter(header string) (time.Duration, bool) {
 	return 0, false
 }
 
-// sleep waits for wait, or until ctx is done.
+// sleep waits for wait, or returns ctx's cause when ctx ends first.
 func sleep(ctx context.Context, wait time.Duration) error {
 	timer := time.NewTimer(wait)
 	defer timer.Stop()
@@ -126,8 +128,8 @@ func sleep(ctx context.Context, wait time.Duration) error {
 	}
 }
 
-// rewindRequest returns a copy of req with its body to send again. A request without a body
-// passes through.
+// rewindRequest returns req ready to send again: a copy with its body from the start, or req itself
+// when it has no body. It fails when the body cannot be read again.
 func rewindRequest(req *http.Request) (*http.Request, error) {
 	if req.Body == nil || req.Body == http.NoBody {
 		return req, nil

@@ -34,7 +34,7 @@ type Project struct {
 	Workspace Workspace `json:"workspace"`
 }
 
-// ProjectLinks are a project's links.
+// ProjectLinks are a project's "links": project.Links.HTML.Href is its page on bitbucket.org.
 type ProjectLinks struct {
 	// Avatar is the address of the project's picture; its ts query changes whenever the project does.
 	Avatar Link `json:"avatar"`

@@ -21,8 +21,9 @@ type bearerLogin struct {
 	tokens *tokenSource
 }
 
-// RoundTrip sends the request with the current access token. A token Bitbucket no longer takes
-// answers 401 (Atlassian's OAuth documentation): it asks for a new one once and sends the request again.
+// RoundTrip sends a request that gets the credential with the current access token, and any other
+// as it is. Bitbucket answers 401 to a token it no longer takes (Atlassian's OAuth documentation),
+// so after a 401 it asks for a new token once and sends the request again.
 func (l *bearerLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 	if !getsCredential(req, l.endpoint) {
 		return l.next.RoundTrip(req)
@@ -55,6 +56,7 @@ func (l *bearerLogin) RoundTrip(req *http.Request) (*http.Response, error) {
 	return l.next.RoundTrip(withBearer(again, fresh))
 }
 
+// withBearer returns a copy of req that carries token as its Bearer token.
 func withBearer(req *http.Request, token string) *http.Request {
 	authenticated := req.Clone(req.Context())
 	authenticated.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
@@ -87,8 +89,8 @@ type tokenSource struct {
 	expiresAt time.Time
 }
 
-// newTokenSource returns a tokenSource that asks tokenURL for access tokens with the consumer's key
-// and secret, sending the request through transport.
+// newTokenSource returns a tokenSource without a token: the first request that needs one asks
+// tokenURL for it.
 func newTokenSource(transport http.RoundTripper, tokenURL, key, secret string) *tokenSource {
 	return &tokenSource{
 		transport: transport,
@@ -145,7 +147,8 @@ type tokenAnswer struct {
 	ExpiresIn int `json:"expires_in"`
 }
 
-// fetch asks for a new token; the lock is held.
+// fetch asks the token address for a new access token and keeps it; the caller holds the lock.
+// Whatever goes wrong, a refusal included, fails with ErrLogin.
 func (s *tokenSource) fetch(ctx context.Context) (string, error) {
 	form := url.Values{"grant_type": {"client_credentials"}}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, s.tokenURL, strings.NewReader(form.Encode()))

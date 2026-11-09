@@ -11,6 +11,7 @@ import (
 	"github.com/alserda-nl/go-bitbucket-cloud/models"
 )
 
+// The page sizes of Bitbucket's projects list.
 const (
 	// projectsDefaultPage is the projects list's page size when none is asked.
 	projectsDefaultPage = 50
@@ -18,6 +19,8 @@ const (
 	projectsLargestPage = 100
 )
 
+// projectSample is Bitbucket's answer for a project, which NewProject starts from.
+//
 //go:embed samples/project.json
 var projectSample []byte
 
@@ -32,13 +35,14 @@ type ProjectOption func(*models.Project)
 // ProjectOptionSet holds the options of NewProject: fakebitbucket.Project.WithKey("ABC").
 type ProjectOptionSet struct{}
 
-// Project is NewProject's options.
+// Project is how a test reaches NewProject's options: NewProject(fakebitbucket.Project.WithKey("ABC")).
 //
 //nolint:gochecknoglobals // the options' namespace: fakebitbucket.Project.WithKey
 var Project ProjectOptionSet
 
 // NewProject returns a private project as Bitbucket answers one, with a key, name and UUID no
-// other builder call returns. Its owner and links follow its workspace and key.
+// other builder call returns; its owner and links follow its workspace and key. It stores nothing:
+// SeedProject puts it in a fake.
 func NewProject(opts ...ProjectOption) models.Project {
 	var project models.Project
 	decodeSample(projectSample, &project)
@@ -58,17 +62,18 @@ func NewProject(opts ...ProjectOption) models.Project {
 	return project
 }
 
-// WithKey sets the project's key.
+// WithKey sets the project's key, and so its links.
 func (ProjectOptionSet) WithKey(key string) ProjectOption {
 	return func(p *models.Project) { p.Key = key }
 }
 
-// WithPrivate sets whether the project is private.
+// WithPrivate sets whether the project is private: WithPrivate(false) makes it public, where
+// NewProject's projects are private.
 func (ProjectOptionSet) WithPrivate(isPrivate bool) ProjectOption {
 	return func(p *models.Project) { p.IsPrivate = isPrivate }
 }
 
-// WithWorkspace puts the project in workspace.
+// WithWorkspace puts the project in workspace, which also gives it its owner and links.
 func (ProjectOptionSet) WithWorkspace(workspace models.Workspace) ProjectOption {
 	return func(p *models.Project) { p.Workspace = workspace }
 }
@@ -83,8 +88,8 @@ type storedProject struct {
 	hiddenReads int
 }
 
-// SeedProject stores a project in its workspace and returns it. It panics when SeedWorkspace did
-// not store that workspace, as HideProject does for a project SeedProject did not store.
+// SeedProject stores a project in its workspace, as if it existed in Bitbucket, and returns it.
+// It panics when SeedWorkspace did not store that workspace first.
 func (s *Server) SeedProject(project models.Project) models.Project {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -107,8 +112,9 @@ func (s *Server) SeedProject(project models.Project) models.Project {
 	return project
 }
 
-// HideProject makes a project SeedProject stored answer 404 to its next reads, as many as reads,
-// as a new project can for 38 seconds and more after its create.
+// HideProject makes the next reads of a stored project answer 404, as many as reads, as a new
+// project can for 38 seconds and more after its create: HideProject(project, 2) hides it from the
+// next two. It panics for a project SeedProject did not store.
 func (s *Server) HideProject(project models.Project, reads int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -121,6 +127,8 @@ func (s *Server) HideProject(project models.Project, reads int) {
 	stored.hiddenReads = reads
 }
 
+// handleGetProject answers the project the path names, its key case-sensitive, or Bitbucket's 404
+// for one that is not there, is hidden, or is private and asked for without a credential.
 func (s *Server) handleGetProject(w http.ResponseWriter, r *http.Request, workspace models.Workspace) {
 	stored, found := s.projects[workspace.UUID][r.PathValue("project_key")]
 	if found && stored.hiddenReads > 0 {
@@ -136,8 +144,8 @@ func (s *Server) handleGetProject(w http.ResponseWriter, r *http.Request, worksp
 	writeJSON(w, http.StatusOK, projectAnswer(stored.project, workspace))
 }
 
-// handleListProjects lists the newest project first, as Bitbucket does; here the newest is the one
-// seeded last.
+// handleListProjects lists a workspace's projects newest first, as Bitbucket does, the one seeded
+// last counting as the newest; a request without a credential sees only the public ones.
 func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request, workspace models.Workspace) {
 	newestFirst := func(a, b *storedProject) int {
 		return cmp.Compare(b.seeded, a.seeded)
@@ -153,8 +161,9 @@ func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request, work
 	writePage(w, r, answers, projectsDefaultPage, projectsLargestPage)
 }
 
-// projectAnswer is a project as Bitbucket answers it: its owner and its workspace in the short
-// forms Bitbucket embeds, made from the workspace as stored now, so a workspace seeded again shows.
+// projectAnswer is a project as Bitbucket answers it, its owner and its workspace in the short
+// forms Bitbucket embeds, both made from workspace as it is stored, so a workspace seeded again
+// shows in its projects.
 func projectAnswer(project models.Project, workspace models.Workspace) any {
 	return struct {
 		models.Project
@@ -167,7 +176,8 @@ func projectAnswer(project models.Project, workspace models.Workspace) any {
 	}
 }
 
-// projectLinks returns a project's links as Bitbucket writes them.
+// projectLinks returns a project's links as Bitbucket writes them: for ("acme", "ABC") its Self
+// is https://api.bitbucket.org/2.0/workspaces/acme/projects/ABC.
 func projectLinks(workspaceSlug, key string) models.ProjectLinks {
 	html := fmt.Sprintf("%s/%s/workspace/projects/%s", webAddress, workspaceSlug, key)
 

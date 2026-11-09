@@ -38,8 +38,8 @@ func (s *tokenServer) RoundTrip(req *http.Request) (*http.Response, error) {
 	return stubResponse(http.StatusOK, nil, fmt.Sprintf(`{"access_token": "token-%d", "expires_in": %d, "token_type": "bearer"}`, s.grants, s.expiresIn)), nil
 }
 
-// newTestTokenSource returns the token source the login makes, asking tokenAddress as key and
-// secret, with now as its clock.
+// newTestTokenSource returns the token source an OAuth consumer with the key "key" and the secret
+// "secret" gets, asking tokenAddress for its tokens, with now as its clock.
 func newTestTokenSource(transport http.RoundTripper, now func() time.Time) *tokenSource {
 	tokens := newTokenSource(transport, tokenAddress, "key", "secret")
 	tokens.now = now

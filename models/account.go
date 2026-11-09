@@ -18,7 +18,7 @@ type Account struct {
 	UUID UUID `json:"uuid"`
 }
 
-// AccountLinks are an account's links.
+// AccountLinks are an account's "links": account.Links.HTML.Href is its page on bitbucket.org.
 type AccountLinks struct {
 	// Avatar is the address of the account's picture.
 	Avatar Link `json:"avatar"`

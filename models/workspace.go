@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// The forking modes a workspace documents.
+// The values of Workspace.ForkingMode that Bitbucket documents.
 const (
 	// ForkingModeAllowForks lets every repository be forked anywhere.
 	ForkingModeAllowForks = "allow_forks"
@@ -45,7 +45,7 @@ type Workspace struct {
 	UUID UUID `json:"uuid"`
 }
 
-// WorkspaceLinks are a workspace's links.
+// WorkspaceLinks are a workspace's "links": workspace.Links.HTML.Href is its page on bitbucket.org.
 type WorkspaceLinks struct {
 	// Avatar is the address of the workspace's picture.
 	Avatar Link `json:"avatar"`

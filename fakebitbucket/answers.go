@@ -9,11 +9,13 @@ import (
 	"strconv"
 )
 
+// invalidPagelenSample is Bitbucket's 400 "Invalid pagelen" for a page size a list does not take.
+//
 //go:embed samples/errors/invalid-pagelen.json
 var invalidPagelenSample []byte
 
-// writeSample answers with one of the recorded answers in samples/errors: its status, its
-// content type and its body.
+// writeSample answers with one of the answers in samples/errors: its status, its content type and
+// its body.
 func writeSample(w http.ResponseWriter, sample []byte) {
 	var answer struct {
 		Status      int             `json:"status"`
@@ -39,6 +41,7 @@ func writeSample(w http.ResponseWriter, sample []byte) {
 	_, _ = w.Write(answer.Body)
 }
 
+// writeJSON answers with status and value as a JSON body.
 func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
@@ -64,10 +67,10 @@ func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, answer)
 }
 
-// writePage answers one page of a list as Bitbucket's repository endpoints do: pagelen is the page
-// size asked, or defaultPageSize when none was; size is the total; next is the same address with
-// the next page number, missing on the last page. A page size outside 1 to largestPage answers
-// 400 "Invalid pagelen", as Bitbucket answers 101 and 1000.
+// writePage answers the page of items a request's page and pagelen ask for, defaultPageSize items
+// a page when it asks none, as Bitbucket's repository endpoints do: ?pagelen=2&page=2 of 5 items
+// answers the third and fourth, with "size": 5 and a next link to page 3. A page size outside 1
+// to largestPage answers 400 "Invalid pagelen", as Bitbucket answers 101 and 1000.
 func writePage(w http.ResponseWriter, r *http.Request, items []any, defaultPageSize, largestPage int) {
 	query := r.URL.Query()
 	pageSize := defaultPageSize

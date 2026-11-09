@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// New's defaults.
 const (
 	defaultEndpoint      = "https://api.bitbucket.org"
 	defaultOAuthTokenURL = "https://bitbucket.org/site/oauth2/access_token" //nolint:gosec // an address, not a credential
@@ -22,8 +23,9 @@ const (
 	headerTimeout = 60 * time.Second
 )
 
-// Client calls Bitbucket Cloud's REST API. Its calls are grouped per area, as Atlassian's API
-// reference groups them.
+// Client calls Bitbucket Cloud's REST API, with its calls grouped per area as Atlassian's API
+// reference groups them: c.Projects.Get, c.Workspaces.ListProjects. A Client is safe for
+// concurrent use.
 type Client struct {
 	// Projects holds the calls of the Projects group.
 	Projects *ProjectsArea
@@ -55,7 +57,8 @@ type config struct {
 	logger *slog.Logger
 }
 
-// WithEndpoint sets the API's address, https://api.bitbucket.org by default; tests point it at the fake.
+// WithEndpoint sets the API's address, without "/2.0": https://api.bitbucket.org by default. Tests
+// point it at the fake: WithEndpoint(fake.URL).
 func WithEndpoint(endpoint string) Option {
 	return func(c *config) { c.endpoint = endpoint }
 }
@@ -66,32 +69,39 @@ func WithOAuthTokenURL(tokenURL string) Option {
 	return func(c *config) { c.oauthTokenURL = tokenURL }
 }
 
-// WithHTTPClient sets the *http.Client whose transport the login, the retries and the logging wrap.
-// It is copied, never changed. Its transport's timeouts then apply instead of the 60 seconds an
-// attempt otherwise gets to receive the answer's headers.
+// WithHTTPClient makes the Client send through a copy of httpClient, which stays as it is, and
+// every attempt through its transport, if it has one. That transport keeps its own timeouts
+// instead of the 60 seconds an attempt otherwise gets to receive the answer's headers.
 func WithHTTPClient(httpClient *http.Client) Option {
 	return func(c *config) { c.httpClient = httpClient }
 }
 
-// WithMaxRetries sets how many times an answer that allows it is tried again, 3 by default; 0 never.
+// WithMaxRetries sets how often a call is tried again after a 429, 500, 502, 503 or 504, 3 by
+// default and 0 for never. A POST is tried again after a 429 only, as a 5xx can come after
+// Bitbucket did the work.
 func WithMaxRetries(maxRetries int) Option {
 	return func(c *config) { c.maxRetries = maxRetries }
 }
 
-// WithRetryWait sets the first wait before trying again, 200 milliseconds by default; it doubles
-// per attempt up to 5 seconds, and 0 tries again at once.
+// WithRetryWait sets the first wait before trying again, 200 milliseconds by default, unless the
+// answer's Retry-After says otherwise. It doubles per attempt up to 5 seconds, give or take 20
+// percent, so the defaults wait about 200, 400 and 800 milliseconds; 0 tries again at once.
 func WithRetryWait(wait time.Duration) Option {
 	return func(c *config) { c.retryWait = wait }
 }
 
-// WithLogger turns logging on: one line per attempt, the token request's and a request sent again
-// after a 401 included, at Warn for an attempt that got no answer, a 429 or a 5xx and at Debug for
-// any other. An attempt's duration ends at the answer's headers. Logging is off by default.
+// WithLogger turns logging on, off by default: one line per attempt, the token requests included,
+// at Warn for no answer, a 429 or a 5xx and at Debug for any other. A line never holds the query,
+// a header or a body, and its duration ends at the answer's headers:
+//
+//	level=DEBUG msg="bitbucket request" method=GET path=/2.0/workspaces/acme attempt=1 duration=84ms status=200
 func WithLogger(logger *slog.Logger) Option {
 	return func(c *config) { c.logger = logger }
 }
 
-// New makes a Client that logs in with credential, which may be nil to send none.
+// New makes a Client that logs in with credential, or sends none when it is nil. A credential
+// with an empty part, or an option New cannot use, fails with ErrInvalidConfig, such as an http
+// endpoint on another machine, which would send the credential unencrypted.
 func New(credential Credential, opts ...Option) (*Client, error) {
 	cfg := config{
 		endpoint:      defaultEndpoint,
@@ -171,6 +181,7 @@ func transports(credential Credential, cfg config, endpoint *url.URL) http.Round
 	return newRetryTransport(login, cfg)
 }
 
+// newRetryTransport returns the retries around next, with the retries and the wait cfg sets.
 func newRetryTransport(next http.RoundTripper, cfg config) *retryTransport {
 	return &retryTransport{
 		next:       next,
@@ -195,9 +206,9 @@ func defaultTransport() http.RoundTripper {
 	return transport
 }
 
-// parseAddress checks that address is an absolute http or https address without a query or a
-// user, and that an http one goes to this machine: the credential goes to it unencrypted, as it does
-// to the fake. A user and password in the address would show in every error that names it.
+// parseAddress returns address parsed when it is https, or http to this machine, without a user
+// or a query, and fails with ErrInvalidConfig otherwise: http elsewhere would carry the credential
+// unencrypted, and a user and password would show in every error that names the address.
 func parseAddress(name, address string) (*url.URL, error) {
 	parsed, err := url.Parse(address)
 	if err != nil {

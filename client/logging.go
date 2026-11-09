@@ -6,10 +6,9 @@ import (
 	"time"
 )
 
-// loggingTransport logs one line per attempt: the method, the path, the status, the attempt's
-// number and how long it took until the answer's headers. Never the query, a header or a body: a
-// pipeline cache's download address carries a signed token in its query, a variable's body
-// carries its value, and a header the credential.
+// loggingTransport logs one line per attempt, as WithLogger shows, and never the query, a header
+// or a body: a pipeline cache's download address carries a signed token in its query, a
+// variable's body carries its value, and a header the credential.
 type loggingTransport struct {
 	// next sends the request on.
 	next http.RoundTripper
