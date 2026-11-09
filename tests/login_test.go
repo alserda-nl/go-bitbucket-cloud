@@ -17,7 +17,7 @@ func TestLogin_AnAPITokenReadsAPrivateProject(t *testing.T) {
 
 	then.the_project_is_returned("ABC").
 		and().every_api_request_carried(fakebitbucket.CredentialBasic).
-		and().the_token_address_was_asked(0)
+		and().the_token_address_was_asked_n_times(0)
 }
 
 func TestLogin_AnOAuthConsumerReadsWithAnAccessToken(t *testing.T) {
@@ -31,7 +31,7 @@ func TestLogin_AnOAuthConsumerReadsWithAnAccessToken(t *testing.T) {
 
 	then.the_project_is_returned("ABC").
 		and().every_api_request_carried(fakebitbucket.CredentialBearer).
-		and().the_token_address_was_asked(1)
+		and().the_token_address_was_asked_n_times(1)
 }
 
 func TestLogin_AnExpiredAccessTokenIsRenewedOnce(t *testing.T) {
@@ -48,7 +48,7 @@ func TestLogin_AnExpiredAccessTokenIsRenewedOnce(t *testing.T) {
 	when.the_project_is_read("ABC")
 
 	then.the_project_is_returned("ABC").
-		and().the_token_address_was_asked(2)
+		and().the_token_address_was_asked_n_times(2)
 }
 
 func TestLogin_TheLogShowsTheTokenRequestsAndTheReadSentAgain(t *testing.T) {
@@ -96,10 +96,10 @@ func TestLogin_RequestsRefusedTogetherRenewTheTokenOnce(t *testing.T) {
 
 	given.the_access_token_has_expired()
 
-	when.the_project_is_read_by_requests_at_once("ABC", 20)
+	when.the_project_is_read_by_n_requests_at_once("ABC", 20)
 
 	then.every_read_succeeded().
-		and().the_token_address_was_asked(2)
+		and().the_token_address_was_asked_n_times(2)
 }
 
 func TestLogin_ATokenRequestAnswered429IsTriedAgain(t *testing.T) {
@@ -112,7 +112,7 @@ func TestLogin_ATokenRequestAnswered429IsTriedAgain(t *testing.T) {
 	when.the_project_is_read("ABC")
 
 	then.the_project_is_returned("ABC").
-		and().the_token_address_was_asked(2)
+		and().the_token_address_was_asked_n_times(2)
 }
 
 func TestLogin_ATokenRequestAnswered503IsTriedAgain(t *testing.T) {
@@ -126,7 +126,7 @@ func TestLogin_ATokenRequestAnswered503IsTriedAgain(t *testing.T) {
 	when.the_project_is_read("ABC")
 
 	then.the_project_is_returned("ABC").
-		and().the_token_address_was_asked(2)
+		and().the_token_address_was_asked_n_times(2)
 }
 
 func TestLogin_AWrongTokenAddressFailsTheLoginNotTheRead(t *testing.T) {

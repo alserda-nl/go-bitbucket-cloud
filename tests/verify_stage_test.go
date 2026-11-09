@@ -42,7 +42,7 @@ func newVerifyStage(t *testing.T) (*verifyStage, *verifyStage, *verifyStage) {
 
 func (s *verifyStage) and() *verifyStage { return s }
 
-func (s *verifyStage) a_new_project_that_answers_404_for_reads(key string, reads int) *verifyStage {
+func (s *verifyStage) a_new_project_that_answers_404_for_n_reads(key string, reads int) *verifyStage {
 	s.fake.HideProject(seedProject(s.fake, s.workspace, key), reads)
 	return s
 }
@@ -77,7 +77,7 @@ func (s *verifyStage) the_project_is_not_verified() *verifyStage {
 	return s
 }
 
-func (s *verifyStage) the_project_was_read_times(key string, count int) *verifyStage {
+func (s *verifyStage) the_project_was_read_n_times(key string, count int) *verifyStage {
 	s.assert.Len(requestsTo(s.fake, fmt.Sprintf("/2.0/workspaces/%s/projects/%s", s.workspace.Slug, key)), count)
 	return s
 }

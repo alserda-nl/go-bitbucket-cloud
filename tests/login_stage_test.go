@@ -101,7 +101,7 @@ func (s *loginStage) the_project_is_read(key string) *loginStage {
 	return s
 }
 
-func (s *loginStage) the_project_is_read_by_requests_at_once(key string, requests int) *loginStage {
+func (s *loginStage) the_project_is_read_by_n_requests_at_once(key string, requests int) *loginStage {
 	s.readKey = key
 	var reads sync.WaitGroup
 	for range requests {
@@ -180,7 +180,7 @@ func (s *loginStage) the_log_has_a_line_per_attempt(lines ...string) *loginStage
 	return s
 }
 
-func (s *loginStage) the_token_address_was_asked(times int) *loginStage {
+func (s *loginStage) the_token_address_was_asked_n_times(times int) *loginStage {
 	s.assert.Len(requestsTo(s.fake, fakebitbucket.TokenPath), times)
 	return s
 }

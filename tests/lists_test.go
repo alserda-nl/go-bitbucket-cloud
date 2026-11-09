@@ -9,35 +9,35 @@ import (
 func TestListProjects_FetchesEveryPageOfTheLargestSize(t *testing.T) {
 	given, when, then := newListStage(t)
 
-	given.projects_in_the_workspace(250)
+	given.n_projects_in_the_workspace(250)
 
 	when.the_projects_of_are_listed("acme")
 
-	then.projects_are_returned(250).
+	then.n_projects_are_returned(250).
 		and().the_pages_asked_for_were("100", "100", "100")
 }
 
 func TestListProjects_ALimitAsksForOneSmallPage(t *testing.T) {
 	given, when, then := newListStage(t)
 
-	given.projects_in_the_workspace(250).
+	given.n_projects_in_the_workspace(250).
 		and().the_list_options_are(client.WithLimit(5))
 
 	when.the_projects_of_are_listed("acme")
 
-	then.projects_are_returned(5).
+	then.n_projects_are_returned(5).
 		and().the_pages_asked_for_were("5")
 }
 
 func TestListProjects_ASmallerPageSizeAsksForMorePages(t *testing.T) {
 	given, when, then := newListStage(t)
 
-	given.projects_in_the_workspace(25).
+	given.n_projects_in_the_workspace(25).
 		and().the_list_options_are(client.WithPageSize(10))
 
 	when.the_projects_of_are_listed("acme")
 
-	then.projects_are_returned(25).
+	then.n_projects_are_returned(25).
 		and().the_pages_asked_for_were("10", "10", "10")
 }
 

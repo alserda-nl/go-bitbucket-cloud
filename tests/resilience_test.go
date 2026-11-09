@@ -10,7 +10,7 @@ func TestResilience_ServerErrorsAreTriedAgain(t *testing.T) {
 	given, when, then := newResilienceStage(t)
 
 	given.a_project("ABC").
-		and().bitbucket_answers_the_next_requests_with(http.StatusServiceUnavailable, 3)
+		and().bitbucket_answers_the_next_n_requests_with(3, http.StatusServiceUnavailable)
 
 	when.the_project_is_read("ABC")
 
@@ -22,7 +22,7 @@ func TestResilience_RateLimitIsTriedAgain(t *testing.T) {
 	given, when, then := newResilienceStage(t)
 
 	given.a_project("ABC").
-		and().bitbucket_answers_the_next_requests_with(http.StatusTooManyRequests, 2)
+		and().bitbucket_answers_the_next_n_requests_with(2, http.StatusTooManyRequests)
 
 	when.the_project_is_read("ABC")
 
@@ -35,7 +35,7 @@ func TestResilience_ExhaustedRetriesReturnBitbucketsAnswer(t *testing.T) {
 
 	given.a_project("ABC").
 		and().the_client_tries_again_at_most(2).
-		and().bitbucket_answers_the_next_requests_with(http.StatusServiceUnavailable, 3)
+		and().bitbucket_answers_the_next_n_requests_with(3, http.StatusServiceUnavailable)
 
 	when.the_project_is_read("ABC")
 
@@ -58,7 +58,7 @@ func TestResilience_EveryAttemptIsLogged(t *testing.T) {
 	given, when, then := newResilienceStage(t)
 
 	given.a_project("ABC").
-		and().bitbucket_answers_the_next_requests_with(http.StatusServiceUnavailable, 1)
+		and().bitbucket_answers_the_next_n_requests_with(1, http.StatusServiceUnavailable)
 
 	when.the_project_is_read("ABC")
 

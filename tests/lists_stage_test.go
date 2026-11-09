@@ -40,7 +40,7 @@ func newListStage(t *testing.T) (*listStage, *listStage, *listStage) {
 
 func (s *listStage) and() *listStage { return s }
 
-func (s *listStage) projects_in_the_workspace(count int) *listStage {
+func (s *listStage) n_projects_in_the_workspace(count int) *listStage {
 	for range count {
 		s.fake.SeedProject(fakebitbucket.NewProject(fakebitbucket.Project.WithWorkspace(s.workspace)))
 	}
@@ -58,7 +58,7 @@ func (s *listStage) the_projects_of_are_listed(workspace string) *listStage {
 	return s
 }
 
-func (s *listStage) projects_are_returned(count int) *listStage {
+func (s *listStage) n_projects_are_returned(count int) *listStage {
 	s.require.NoError(s.err)
 	s.assert.Len(s.projects, count)
 	return s

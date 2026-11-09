@@ -58,7 +58,7 @@ func (s *resilienceStage) the_client_tries_again_at_most(maxRetries int) *resili
 	return s
 }
 
-func (s *resilienceStage) bitbucket_answers_the_next_requests_with(status, times int) *resilienceStage {
+func (s *resilienceStage) bitbucket_answers_the_next_n_requests_with(times, status int) *resilienceStage {
 	s.fake.FailNext(status, times)
 	return s
 }
