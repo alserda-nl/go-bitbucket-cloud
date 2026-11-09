@@ -1,0 +1,83 @@
+name: Release Tag
+
+on:
+  workflow_call:
+    inputs:
+      add_prerelease_suffix:
+        description: Adds a prerelease suffix at the end of the tag. Defaults to true on pull request actions.
+        type: boolean
+        required: false
+        default: "${{ github.event_name == 'pull_request' }}"
+      ref:
+        description: Git ref being built (for suffix calculation)
+        type: string
+        required: false
+    outputs:
+      tag:
+        description: "The next semantic versioning tag"
+        value: "${{ jobs.tag.outputs.tag }}"
+      previous_tag:
+        description: "The previous semantic versioning tag"
+        value: "${{ jobs.tag.outputs.previous_tag }}"
+      changelog:
+        description: "Conventional changelog since previous tag"
+        value: "${{ jobs.tag.outputs.changelog }}"
+
+jobs:
+  tag:
+    name: Tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: "${{ steps.tagger.outputs.tag }}"
+      previous_tag: "${{ steps.next_tag.outputs.previous_tag }}"
+      changelog: "${{ steps.next_tag.outputs.changelog }}"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0  # required so tags & history are available
+
+      - name: Determine suffix
+        id: suffix
+        if: "${{ inputs.add_prerelease_suffix }}"
+        env:
+          BRANCH_NAME: "${{ inputs.ref || (github.event_name == 'pull_request' && github.head_ref || github.ref) }}"
+          GH_RUN: "${{ github.run_id }}.${{ github.run_attempt }}"
+        run: |
+          # The branch name goes into a tag: keep only letters, digits and hyphens.
+          SAFE_BRANCH="$(printf '%s' "$BRANCH_NAME" | tr -c '0-9A-Za-z-' '-')"
+          echo "suffix=$SAFE_BRANCH.$GH_RUN" >> "$GITHUB_OUTPUT"
+
+      - name: Create semantic version tag
+        id: next_tag
+        uses: mathieudutour/github-tag-action@a22cf08638b34d5badda920f9daf6e72c477b07b # v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          dry_run: true
+
+      # Step outputs reach the scripts through the environment, never as text pasted into them.
+      - name: Create final tag
+        id: tagger
+        env:
+          ADD_SUFFIX: ${{ inputs.add_prerelease_suffix }}
+          NEW_TAG: ${{ steps.next_tag.outputs.new_tag }}
+          SUFFIX: ${{ steps.suffix.outputs.suffix }}
+        run: |
+          if [ "$ADD_SUFFIX" = "false" ]; then
+            echo "tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$NEW_TAG-$SUFFIX" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Output calculated tag
+        env:
+          TAG: ${{ steps.tagger.outputs.tag }}
+        run: echo "$TAG"
+
+      - name: Output tag to step summary
+        env:
+          TAG: ${{ steps.tagger.outputs.tag }}
+        run: |
+          echo "### Tag" >> $GITHUB_STEP_SUMMARY
+          echo "\`${TAG}\`" >> $GITHUB_STEP_SUMMARY
