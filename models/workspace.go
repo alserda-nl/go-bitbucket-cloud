@@ -25,7 +25,8 @@ type Workspace struct {
 	IsPersonal bool `json:"is_personal"`
 	// IsPrivacyEnforced is true when the workspace allows no public content, such as a public repository.
 	IsPrivacyEnforced bool `json:"is_privacy_enforced"`
-	// IsPrivate is true when only the workspace's members may see it.
+	// IsPrivate is true when the workspace's content is for its members only; Bitbucket still answers
+	// the workspace's own details to anyone.
 	IsPrivate bool `json:"is_private"`
 	// Links are the workspace's picture, its pages on bitbucket.org and the API addresses of its
 	// members, owners, projects, repositories, snippets and webhooks.

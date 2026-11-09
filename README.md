@@ -102,7 +102,7 @@ func TestSomething(t *testing.T) {
 }
 ```
 
-The fake answers as Bitbucket does, from answers recorded in a test workspace (`fakebitbucket/samples/README.md` lists them), and its package documentation lists where it knowingly differs.
+The fake answers as Bitbucket does, from answers Bitbucket gave (`fakebitbucket/samples/README.md` lists them), and its package documentation lists where it knowingly differs.
 
 ## Development
 
