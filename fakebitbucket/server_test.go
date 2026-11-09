@@ -215,6 +215,54 @@ func TestServer_HideProjectRefusesAProjectItDoesNotHave(t *testing.T) {
 	})
 }
 
+func TestServer_SeedProjectRefusesAProjectWhoseWorkspaceItDoesNotHave(t *testing.T) {
+	fake := fakebitbucket.New(t)
+	elsewhere := fakebitbucket.NewWorkspace(fakebitbucket.Workspace.WithSlug("elsewhere"))
+	project := fakebitbucket.NewProject(fakebitbucket.Project.WithWorkspace(elsewhere), fakebitbucket.Project.WithKey("ABC"))
+
+	assert.PanicsWithValue(t, "fakebitbucket: SeedProject: SeedWorkspace stored no workspace elsewhere", func() {
+		fake.SeedProject(project)
+	})
+}
+
+// TestServer_AnswersEveryFieldOfTheRecordedAnswers compares each answer's fields and their JSON
+// types with the sample it starts from, one of Bitbucket's own answers, so a field the fake drops,
+// adds or retypes fails here; null matches any type.
+func TestServer_AnswersEveryFieldOfTheRecordedAnswers(t *testing.T) {
+	fake := fakebitbucket.New(t)
+	workspace := seededWorkspace(fake, "acme")
+	fake.SeedProject(fakebitbucket.NewProject(fakebitbucket.Project.WithWorkspace(workspace), fakebitbucket.Project.WithKey("ABC")))
+
+	cases := []struct {
+		name   string
+		path   string
+		sample string
+	}{
+		{
+			name:   "a workspace",
+			path:   "/2.0/workspaces/acme",
+			sample: "workspace.json",
+		},
+		{
+			name:   "a project",
+			path:   "/2.0/workspaces/acme/projects/ABC",
+			sample: "project.json",
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			actual := send(t, fake, http.MethodGet, testCase.path)
+			require.Equal(t, http.StatusOK, actual.status)
+
+			var expected map[string]any
+			require.NoError(t, json.Unmarshal(readSample(t, testCase.sample), &expected))
+
+			assert.Empty(t, differentFields("", expected, actual.body), "GET %s should answer the fields of %s, each with its JSON type", testCase.path, testCase.sample)
+		})
+	}
+}
+
 func TestServer_AnswersAWorkspaceThatIsNotThere(t *testing.T) {
 	fake := fakebitbucket.New(t)
 
@@ -335,4 +383,47 @@ func requestToken(t *testing.T, fake *fakebitbucket.Server, key, secret, grant s
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	return do(t, request)
+}
+
+// readSample reads one of the samples: Bitbucket's answers with names and IDs replaced.
+func readSample(t *testing.T, name string) []byte {
+	t.Helper()
+
+	sample, err := os.ReadFile(fmt.Sprintf("samples/%s", name))
+	require.NoError(t, err)
+
+	return sample
+}
+
+// differentFields lists every field that expected or actual has and the other lacks, and every
+// field the two hold as different JSON types; null matches any type.
+func differentFields(path string, expected, actual any) []string {
+	expectedObject, expectedIsObject := expected.(map[string]any)
+	actualObject, actualIsObject := actual.(map[string]any)
+
+	switch {
+	case expected == nil || actual == nil:
+		return nil
+	case expectedIsObject && actualIsObject:
+		var different []string
+		for _, key := range slices.Sorted(maps.Keys(expectedObject)) {
+			if _, found := actualObject[key]; !found {
+				different = append(different, fmt.Sprintf("%s.%s: missing", path, key))
+				continue
+			}
+
+			different = append(different, differentFields(fmt.Sprintf("%s.%s", path, key), expectedObject[key], actualObject[key])...)
+		}
+		for _, key := range slices.Sorted(maps.Keys(actualObject)) {
+			if _, found := expectedObject[key]; !found {
+				different = append(different, fmt.Sprintf("%s.%s: not in the sample", path, key))
+			}
+		}
+
+		return different
+	case fmt.Sprintf("%T", expected) != fmt.Sprintf("%T", actual):
+		return []string{fmt.Sprintf("%s: want %T, got %T", path, expected, actual)}
+	default:
+		return nil
+	}
 }

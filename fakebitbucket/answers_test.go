@@ -15,7 +15,7 @@ import (
 
 // TestAnswers sends a request to every API route the fake serves and, when FAKEBITBUCKET_ANSWERS
 // names a file, writes the answers there as a list of operation, status and body. The maintainers
-// compare that file with the answers Bitbucket gave in their test workspace, running this test by
+// compare that file with the answers Bitbucket gave, running this test by
 // its name: its name, the variable and the three keys stay as they are. The token address is left
 // out: no answer of Bitbucket's to compare it with is recorded.
 func TestAnswers(t *testing.T) {

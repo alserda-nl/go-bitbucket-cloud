@@ -83,10 +83,15 @@ type storedProject struct {
 	hiddenReads int
 }
 
-// SeedProject stores a project in its workspace, which SeedWorkspace must have stored, and returns it.
+// SeedProject stores a project in its workspace and returns it. It panics when SeedWorkspace did
+// not store that workspace, as HideProject does for a project SeedProject did not store.
 func (s *Server) SeedProject(project models.Project) models.Project {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if _, found := s.findWorkspace(project.Workspace.UUID); !found {
+		panic(fmt.Sprintf("fakebitbucket: SeedProject: SeedWorkspace stored no workspace %s", project.Workspace.Slug))
+	}
 
 	workspaceUUID := project.Workspace.UUID
 	if s.projects[workspaceUUID] == nil {

@@ -4,7 +4,7 @@
 // to a build.
 //
 // It answers as Bitbucket does, not as a client sends: its routes, statuses, error answers and the
-// forms it stores come from answers Bitbucket gave in a test workspace, and each builder starts from
+// forms it stores come from answers Bitbucket gave, and each builder starts from
 // one of those answers with every name and ID replaced (samples/README.md lists them).
 //
 // Where it knowingly differs from Bitbucket:
