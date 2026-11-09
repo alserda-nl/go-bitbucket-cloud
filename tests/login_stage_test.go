@@ -51,8 +51,6 @@ func newLoginStage(t *testing.T) (*loginStage, *loginStage, *loginStage) {
 
 func (s *loginStage) and() *loginStage { return s }
 
-// --- GIVEN ---
-
 func (s *loginStage) a_private_project(key string) *loginStage {
 	seedProject(s.fake, s.workspace, key)
 	return s
@@ -97,8 +95,6 @@ func (s *loginStage) the_access_token_has_expired() *loginStage {
 	return s
 }
 
-// --- WHEN ---
-
 func (s *loginStage) the_project_is_read(key string) *loginStage {
 	s.readKey = key
 	s.project, s.err = s.apiClient.Projects.Get(s.t.Context(), s.workspace.Slug, key)
@@ -123,8 +119,6 @@ func (s *loginStage) the_projects_are_listed() *loginStage {
 	s.projects, s.err = s.apiClient.Workspaces.ListProjects(s.t.Context(), s.workspace.Slug)
 	return s
 }
-
-// --- THEN ---
 
 func (s *loginStage) the_project_is_returned(key string) *loginStage {
 	s.require.NoError(s.err)

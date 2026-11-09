@@ -42,8 +42,6 @@ func newVerifyStage(t *testing.T) (*verifyStage, *verifyStage, *verifyStage) {
 
 func (s *verifyStage) and() *verifyStage { return s }
 
-// --- GIVEN ---
-
 func (s *verifyStage) a_new_project_that_answers_404_for_reads(key string, reads int) *verifyStage {
 	s.fake.HideProject(seedProject(s.fake, s.workspace, key), reads)
 	return s
@@ -53,8 +51,6 @@ func (s *verifyStage) verify_reads_at_most(maxAttempts int) *verifyStage {
 	s.options = append(s.options, client.WithMaxAttempts(maxAttempts))
 	return s
 }
-
-// --- WHEN ---
 
 func (s *verifyStage) the_project_is_verified(key string) *verifyStage {
 	apiClient := newClient(s.t, s.fake, apiToken())
@@ -70,8 +66,6 @@ func (s *verifyStage) the_project_is_verified(key string) *verifyStage {
 	}, s.options...)
 	return s
 }
-
-// --- THEN ---
 
 func (s *verifyStage) the_project_read_back() *verifyStage {
 	s.assert.NoError(s.err)

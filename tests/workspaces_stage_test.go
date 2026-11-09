@@ -38,8 +38,6 @@ func newWorkspaceStage(t *testing.T) (*workspaceStage, *workspaceStage, *workspa
 
 func (s *workspaceStage) and() *workspaceStage { return s }
 
-// --- GIVEN ---
-
 func (s *workspaceStage) a_private_workspace(slug string) *workspaceStage {
 	s.workspace = seedWorkspace(s.fake, slug)
 	return s
@@ -50,8 +48,6 @@ func (s *workspaceStage) the_client_logs_in_with(credential client.Credential) *
 	return s
 }
 
-// --- WHEN ---
-
 func (s *workspaceStage) the_workspace_is_read(identifier string) *workspaceStage {
 	s.read, s.err = newClient(s.t, s.fake, s.login).Workspaces.Get(s.t.Context(), identifier)
 	return s
@@ -60,8 +56,6 @@ func (s *workspaceStage) the_workspace_is_read(identifier string) *workspaceStag
 func (s *workspaceStage) the_workspace_is_read_by_its_uuid() *workspaceStage {
 	return s.the_workspace_is_read(s.workspace.UUID)
 }
-
-// --- THEN ---
 
 func (s *workspaceStage) the_workspace_is_returned() *workspaceStage {
 	s.require.NoError(s.err)

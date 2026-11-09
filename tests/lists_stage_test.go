@@ -40,8 +40,6 @@ func newListStage(t *testing.T) (*listStage, *listStage, *listStage) {
 
 func (s *listStage) and() *listStage { return s }
 
-// --- GIVEN ---
-
 func (s *listStage) projects_in_the_workspace(count int) *listStage {
 	for range count {
 		s.fake.SeedProject(fakebitbucket.NewProject(fakebitbucket.Project.WithWorkspace(s.workspace)))
@@ -55,14 +53,10 @@ func (s *listStage) the_list_options_are(options ...client.ListOption) *listStag
 	return s
 }
 
-// --- WHEN ---
-
 func (s *listStage) the_projects_of_are_listed(workspace string) *listStage {
 	s.projects, s.err = newClient(s.t, s.fake, apiToken()).Workspaces.ListProjects(s.t.Context(), workspace, s.options...)
 	return s
 }
-
-// --- THEN ---
 
 func (s *listStage) projects_are_returned(count int) *listStage {
 	s.require.NoError(s.err)

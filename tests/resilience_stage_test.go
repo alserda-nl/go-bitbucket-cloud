@@ -48,8 +48,6 @@ func newResilienceStage(t *testing.T) (*resilienceStage, *resilienceStage, *resi
 
 func (s *resilienceStage) and() *resilienceStage { return s }
 
-// --- GIVEN ---
-
 func (s *resilienceStage) a_project(key string) *resilienceStage {
 	seedProject(s.fake, s.workspace, key)
 	return s
@@ -65,8 +63,6 @@ func (s *resilienceStage) bitbucket_answers_the_next_requests_with(status, times
 	return s
 }
 
-// --- WHEN ---
-
 func (s *resilienceStage) the_project_is_read(key string) *resilienceStage {
 	logger := slog.New(slog.NewTextHandler(&s.log, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	apiClient := newClient(s.t, s.fake, apiToken(), append(s.options, client.WithLogger(logger))...)
@@ -75,8 +71,6 @@ func (s *resilienceStage) the_project_is_read(key string) *resilienceStage {
 	s.project, s.err = apiClient.Projects.Get(s.t.Context(), s.workspace.Slug, key)
 	return s
 }
-
-// --- THEN ---
 
 func (s *resilienceStage) the_project_is_returned(key string) *resilienceStage {
 	s.require.NoError(s.err)
@@ -91,7 +85,7 @@ func (s *resilienceStage) bitbucket_answer_is_returned(status int) *resilienceSt
 	return s
 }
 
-func (s *resilienceStage) the_project_was_requested_times(count int) *resilienceStage {
+func (s *resilienceStage) the_project_was_requested_n_times(count int) *resilienceStage {
 	s.assert.Len(requestsTo(s.fake, fmt.Sprintf("/2.0/workspaces/%s/projects/%s", s.workspace.Slug, s.readKey)), count)
 	return s
 }
