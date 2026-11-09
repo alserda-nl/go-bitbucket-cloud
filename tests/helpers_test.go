@@ -4,7 +4,11 @@
 package e2e
 
 import (
+	"bytes"
 	"fmt"
+	"log/slog"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -67,12 +71,22 @@ func seedProject(fake *fakebitbucket.Server, workspace models.Workspace, key str
 
 // requestsTo returns the requests the fake got for path.
 func requestsTo(fake *fakebitbucket.Server, path string) []fakebitbucket.Request {
-	var matching []fakebitbucket.Request
-	for _, request := range fake.Requests() {
-		if request.Path == path {
-			matching = append(matching, request)
-		}
-	}
+	return slices.DeleteFunc(fake.Requests(), func(request fakebitbucket.Request) bool {
+		return request.Path != path
+	})
+}
 
-	return matching
+// projectPath returns the API path of the project with key in workspace.
+func projectPath(workspace models.Workspace, key string) string {
+	return fmt.Sprintf("/2.0/workspaces/%s/projects/%s", workspace.Slug, key)
+}
+
+// debugLogger returns a logger that writes every line, the debug ones included, to output.
+func debugLogger(output *bytes.Buffer) *slog.Logger {
+	return slog.New(slog.NewTextHandler(output, &slog.HandlerOptions{Level: slog.LevelDebug}))
+}
+
+// logLines returns the lines written to log.
+func logLines(log *bytes.Buffer) []string {
+	return strings.Split(strings.TrimSpace(log.String()), "\n")
 }

@@ -3,9 +3,7 @@ package e2e
 import (
 	"bytes"
 	"fmt"
-	"log/slog"
 	"net/http"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -67,7 +65,7 @@ func (s *loginStage) the_client_logs_in_with(credential client.Credential) *logi
 }
 
 func (s *loginStage) the_client_logs_in_with_a_log(credential client.Credential) *loginStage {
-	logger := slog.New(slog.NewTextHandler(&s.log, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	logger := debugLogger(&s.log)
 	s.apiClient = newClient(s.t, s.fake, credential, client.WithLogger(logger))
 	return s
 }
@@ -161,7 +159,7 @@ func (s *loginStage) the_credential_is_refused() *loginStage {
 }
 
 func (s *loginStage) every_api_request_carried(credential string) *loginStage {
-	requests := requestsTo(s.fake, fmt.Sprintf("/2.0/workspaces/%s/projects/%s", s.workspace.Slug, s.readKey))
+	requests := requestsTo(s.fake, projectPath(s.workspace, s.readKey))
 	s.require.NotEmpty(requests, "no request read the project %s", s.readKey)
 	for _, request := range requests {
 		s.assert.Equal(credential, request.Credential, "%s %s", request.Method, request.Path)
@@ -171,7 +169,7 @@ func (s *loginStage) every_api_request_carried(credential string) *loginStage {
 }
 
 func (s *loginStage) the_log_has_a_line_per_attempt(lines ...string) *loginStage {
-	logged := strings.Split(strings.TrimSpace(s.log.String()), "\n")
+	logged := logLines(&s.log)
 	s.require.Len(logged, len(lines))
 	for i, line := range lines {
 		s.assert.Contains(logged[i], line)

@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -78,6 +77,6 @@ func (s *verifyStage) the_project_is_not_verified() *verifyStage {
 }
 
 func (s *verifyStage) the_project_was_read_n_times(key string, count int) *verifyStage {
-	s.assert.Len(requestsTo(s.fake, fmt.Sprintf("/2.0/workspaces/%s/projects/%s", s.workspace.Slug, key)), count)
+	s.assert.Len(requestsTo(s.fake, projectPath(s.workspace, key)), count)
 	return s
 }

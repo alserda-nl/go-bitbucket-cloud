@@ -2,9 +2,6 @@ package e2e
 
 import (
 	"bytes"
-	"fmt"
-	"log/slog"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -64,7 +61,7 @@ func (s *resilienceStage) bitbucket_answers_the_next_n_requests_with(times, stat
 }
 
 func (s *resilienceStage) the_project_is_read(key string) *resilienceStage {
-	logger := slog.New(slog.NewTextHandler(&s.log, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	logger := debugLogger(&s.log)
 	apiClient := newClient(s.t, s.fake, apiToken(), append(s.options, client.WithLogger(logger))...)
 
 	s.readKey = key
@@ -86,12 +83,12 @@ func (s *resilienceStage) bitbucket_answer_is_returned(status int) *resilienceSt
 }
 
 func (s *resilienceStage) the_project_was_requested_n_times(count int) *resilienceStage {
-	s.assert.Len(requestsTo(s.fake, fmt.Sprintf("/2.0/workspaces/%s/projects/%s", s.workspace.Slug, s.readKey)), count)
+	s.assert.Len(requestsTo(s.fake, projectPath(s.workspace, s.readKey)), count)
 	return s
 }
 
 func (s *resilienceStage) the_log_has_a_line_per_attempt(lines ...string) *resilienceStage {
-	logged := strings.Split(strings.TrimSpace(s.log.String()), "\n")
+	logged := logLines(&s.log)
 	s.require.Len(logged, len(lines))
 	for i, line := range lines {
 		s.assert.Contains(logged[i], line)
