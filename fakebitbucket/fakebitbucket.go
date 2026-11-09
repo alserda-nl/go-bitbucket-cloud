@@ -34,9 +34,11 @@ const (
 
 // Request is a request the fake received, without its headers and body.
 type Request struct {
+	// Method is the request's HTTP method.
 	Method string
 	// Path is the escaped path, as it was sent.
-	Path  string
+	Path string
+	// Query is the request's query.
 	Query url.Values
 	// Credential is one of the Credential constants.
 	Credential string
@@ -47,19 +49,27 @@ type Request struct {
 
 // Server is the fake Bitbucket, on an httptest.Server whose URL goes to client.WithEndpoint.
 type Server struct {
+	// Server is the HTTP server the fake runs on.
 	*httptest.Server
 
+	// mu guards every field below.
 	mu sync.Mutex
-	// workspaces are by their slug in lowercase: a slug is read in any case (2026-10-19).
+	// workspaces holds the seeded workspaces by their slug in lowercase, as Bitbucket finds a
+	// workspace by its slug in any case.
 	workspaces map[string]models.Workspace
-	// projects are by their workspace's UUID, then by their key, which is case-sensitive.
+	// projects holds the seeded projects by their workspace's UUID, then by their key, which is
+	// case-sensitive.
 	projects map[models.UUID]map[string]*storedProject
 	// lastSeeded is the number SeedProject gave the project it stored last.
 	lastSeeded int
-	tokens     map[string]bool
-	issued     int
-	failures   []int
-	requests   []Request
+	// tokens holds the access tokens the token address issued that have not expired.
+	tokens map[string]bool
+	// issued counts the access tokens issued, which makes each one unique.
+	issued int
+	// failures are the statuses FailNext asked for, for the next requests.
+	failures []int
+	// requests are the requests the fake received, the first first.
+	requests []Request
 }
 
 // New starts a fake Bitbucket that t stops when the test ends.
@@ -185,7 +195,7 @@ func credentialOf(r *http.Request) string {
 }
 
 // visible reports whether a request may see an object: without a credential, Bitbucket shows
-// only what is public (2026-10-30).
+// only what is public.
 func visible(r *http.Request, isPrivate bool) bool {
 	return !isPrivate || credentialOf(r) != CredentialNone
 }

@@ -15,8 +15,8 @@ import (
 const (
 	// jsonMediaType is the media type of the bodies the API takes and gives.
 	jsonMediaType = "application/json"
-	// textShown is how much of an answer that is not JSON an error's text shows: a 402 on
-	// downloads was a whole HTML page (2026-10-26).
+	// textShown is how many characters of an answer that is not JSON an error's text shows: some,
+	// such as a 402 for a repository's downloads, are a whole HTML page.
 	textShown = 300
 )
 
@@ -27,7 +27,7 @@ var (
 	// ErrInvalidOption is returned by a call given an option out of range, before any request.
 	ErrInvalidOption = errors.New("bitbucket: invalid option")
 	// ErrNotFound matches every 404, whatever its shape. A "not found" that Bitbucket answers with
-	// 400, such as stopping a pipeline run that does not exist (2026-10-26), does not match it.
+	// 400, such as stopping a pipeline run that does not exist, does not match it.
 	ErrNotFound = errors.New("bitbucket: not found")
 	// ErrLogin is returned when the OAuth consumer gets no access token. It never matches
 	// ErrNotFound: a 404 from the token address says nothing about the object a call asked for.
@@ -38,28 +38,31 @@ var (
 // APIError is Bitbucket's answer to a call when its status is 400 or above. Its error answers
 // differ with the service behind the endpoint; APIError keeps what a caller can use from each.
 type APIError struct {
-	// Method and Path are the call's, the path without its query.
+	// Method is the call's HTTP method.
 	Method string
-	Path   string
+	// Path is the call's path, without its query.
+	Path string
 	// StatusCode is the HTTP status.
 	StatusCode int
-	Message    string
+	// Message is Bitbucket's own words for the error.
+	Message string
 	// Detail is the detail Bitbucket gave as text.
 	Detail string
 	// Fields names the fields a 400 refused, with what is wrong with each.
 	Fields map[string][]string
 	// Key names the error in the Pipelines, deployment and runner services:
 	// "variable-service.variable.duplicate", "agent-service.runner.not-found".
-	Key       string
+	Key string
+	// Arguments are the values that go with Key, such as the UUID a duplicate variable's error names.
 	Arguments map[string]any
 	// ID identifies a 500 for Atlassian's support.
 	ID string
 	// Attempts is how often the call was sent, retries included.
 	Attempts int
-	// RequiredScopes and GrantedScopes come with a 403 for a missing scope: the scopes the call
-	// needs and the ones the credential has.
+	// RequiredScopes are the scopes the call needs, given with a 403 for a missing scope.
 	RequiredScopes []string
-	GrantedScopes  []string
+	// GrantedScopes are the scopes the credential has, given with the same 403.
+	GrantedScopes []string
 	// Text is the answer when it is not JSON, such as a text/plain 400 or a text/html 402.
 	Text string
 }
@@ -116,8 +119,8 @@ func (e *APIError) MissingScopes() []string {
 	return missing
 }
 
-// errorAnswer holds every top-level field of the error answers recorded from 2026-10-12 to
-// 2026-10-30; the fields an answer lacks stay empty. As JSON:
+// errorAnswer holds every top-level field of Bitbucket's error answers; the fields an answer
+// lacks stay empty. As JSON:
 //   - {"type": "error", "error": {"message", "detail", "fields", "id", "data"}}: the repository
 //     endpoints, a branch error and the Pipelines services, whose data holds their key and arguments;
 //   - {"key", "message", "arguments"}: the runners;
@@ -128,11 +131,15 @@ func (e *APIError) MissingScopes() []string {
 type errorAnswer struct {
 	// Error is an object in the repository endpoints' and the Pipelines services' shapes, and
 	// text in an OAuth refusal (RFC 6749, section 5.2).
-	Error            json.RawMessage `json:"error"`
-	ErrorDescription string          `json:"error_description"`
-	Key              string          `json:"key"`
-	Message          string          `json:"message"`
-	Arguments        map[string]any  `json:"arguments"`
+	Error json.RawMessage `json:"error"`
+	// ErrorDescription is an OAuth refusal's description.
+	ErrorDescription string `json:"error_description"`
+	// Key is a runner error's key.
+	Key string `json:"key"`
+	// Message is a runner error's or a Pipelines 500's message.
+	Message string `json:"message"`
+	// Arguments are a runner error's arguments.
+	Arguments map[string]any `json:"arguments"`
 }
 
 // known reports whether the answer has a field of one of the six shapes.
@@ -142,12 +149,14 @@ func (a errorAnswer) known() bool {
 
 // errorObject is the "error" object of the repository endpoints and of the Pipelines services.
 type errorObject struct {
+	// Message is Bitbucket's own words for the error.
 	Message string `json:"message"`
 	// Detail is text, or the required and granted scopes on a 403 for a scope.
 	Detail json.RawMessage `json:"detail"`
 	// Fields maps a field to one complaint or to a list of them.
 	Fields map[string]json.RawMessage `json:"fields"`
-	ID     string                     `json:"id"`
+	// ID identifies a 500 for Atlassian's support.
+	ID string `json:"id"`
 	// Data holds a branch error's key, or the Pipelines services' key and arguments.
 	Data map[string]any `json:"data"`
 }
@@ -247,7 +256,7 @@ func shorten(text string) string {
 }
 
 // withoutURL drops the address from an *url.Error: its query can carry a signed token, as a
-// pipeline cache's download address did (2026-10-26).
+// pipeline cache's download address does.
 func withoutURL(err error) error {
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {

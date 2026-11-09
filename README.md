@@ -66,7 +66,7 @@ Every answer of 400 or above comes back as a `*client.APIError`, whatever the sh
 
 ### Waiting for a write to show
 
-Bitbucket does not always answer with what was just written: a new project answered 404 for 38 seconds and more on 2026-10-26. `client.Verify` reads until a check says the object is there as expected, 3 seconds apart and at most 20 times by default. A 404, a 429, a 5xx or a read that got no answer reads again; any other refusal ends the reads at once. However the reads end, the error matches `client.ErrNotVerified`, as the object was written:
+Bitbucket does not always answer with what was just written: a new project can answer 404 for 38 seconds and more. `client.Verify` reads until a check says the object is there as expected, 3 seconds apart and at most 20 times by default. A 404, a 429, a 5xx or a read that got no answer reads again; any other refusal ends the reads at once. However the reads end, the error matches `client.ErrNotVerified`, as the object was written:
 
 ```go
 err := client.Verify(ctx, func(ctx context.Context) (bool, error) {

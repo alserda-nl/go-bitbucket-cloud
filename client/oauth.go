@@ -13,9 +13,12 @@ import (
 
 // bearerLogin sends an OAuth consumer's access token as a Bearer token.
 type bearerLogin struct {
-	next     http.RoundTripper
+	// next sends the request on.
+	next http.RoundTripper
+	// endpoint is the API's address: only a request to it gets the access token.
 	endpoint *url.URL
-	tokens   *tokenSource
+	// tokens hands out the current access token and renews it.
+	tokens *tokenSource
 }
 
 // RoundTrip sends the request with the current access token. A token Bitbucket no longer takes
@@ -60,21 +63,27 @@ func withBearer(req *http.Request, token string) *http.Request {
 }
 
 // tokenSource asks the token address for access tokens with the client credentials grant and
-// keeps the current one until its expires_in has passed. The grant gives no refresh token since
-// 2026-05-04, so a new token is a new grant.
+// keeps the current one until its expires_in has passed. The grant gives no refresh token, so a
+// new token is a new grant.
 type tokenSource struct {
 	// transport sends the token request without an http.Client, which would follow a redirect with
 	// the consumer's key and secret still in its header.
 	transport http.RoundTripper
-	tokenURL  string
-	key       string
-	secret    string
-	now       func() time.Time
+	// tokenURL is the token address.
+	tokenURL string
+	// key is the consumer's key.
+	key string
+	// secret is the consumer's secret.
+	secret string
+	// now returns the current time; tests pin it.
+	now func() time.Time
 
 	// lock holds a value while a token is fetched, so requests that need one wait for the same
 	// fetch; a request whose context ends stops waiting.
-	lock      chan struct{}
-	token     string
+	lock chan struct{}
+	// token is the current access token, empty before the first fetch.
+	token string
+	// expiresAt is when token expires, from the answer's expires_in.
 	expiresAt time.Time
 }
 
@@ -117,8 +126,10 @@ func (s *tokenSource) whileLocked(ctx context.Context, get func() (string, error
 
 // tokenAnswer is the token address's answer; "scope" and "token_type" are not used.
 type tokenAnswer struct {
+	// AccessToken is the access token itself.
 	AccessToken string `json:"access_token"`
-	ExpiresIn   int    `json:"expires_in"`
+	// ExpiresIn is how many seconds the token lasts.
+	ExpiresIn int `json:"expires_in"`
 }
 
 // fetch asks for a new token; the lock is held.

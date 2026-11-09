@@ -12,7 +12,9 @@ var tokenSample []byte
 // oauthRefusal is a refusal of the token address, as RFC 6749, section 5.2, describes one;
 // Bitbucket's own is not recorded.
 type oauthRefusal struct {
-	Error            string `json:"error"`
+	// Error is the refusal's code, such as invalid_client.
+	Error string `json:"error"`
+	// ErrorDescription says why, in words.
 	ErrorDescription string `json:"error_description"`
 }
 

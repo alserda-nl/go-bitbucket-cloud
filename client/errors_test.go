@@ -132,7 +132,7 @@ func TestNewAPIError_ReadsEveryShapeBitbucketAnswers(t *testing.T) {
 }
 
 func TestNewAPIError_ReadsARemoved10PathsAnswer(t *testing.T) {
-	// Written by hand in the shape Bitbucket answered a removed 1.0 path with (2026-10-13).
+	// Written by hand in the shape Bitbucket answers a removed 1.0 path with.
 	body := []byte(`{"message": "This API is no longer supported.", "status": 410}`)
 
 	actual := newAPIError(http.MethodGet, "/1.0/privileges/a/b", http.StatusGone, "application/json", body)
@@ -280,7 +280,7 @@ func TestAPIError_ErrorSaysTheCallTheStatusAndBitbucketsWords(t *testing.T) {
 
 func TestAPIError_EveryNotFoundMatchesErrNotFound(t *testing.T) {
 	notFound := &APIError{StatusCode: http.StatusNotFound}
-	// Stopping a run that does not exist answers 400 "Unexpected response body" (2026-10-26).
+	// Stopping a pipeline run that does not exist answers 400 "Unexpected response body".
 	badRequest := &APIError{StatusCode: http.StatusBadRequest}
 
 	assert.ErrorIs(t, notFound, ErrNotFound)

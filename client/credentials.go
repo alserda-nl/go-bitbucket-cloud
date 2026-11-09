@@ -8,8 +8,8 @@ import (
 )
 
 // A Credential logs a Client in to Bitbucket: an APIToken or an OAuthConsumer. A nil Credential
-// sends none, and Bitbucket then answers as to anyone: a private workspace's details, a projects
-// list of only its public projects, and 404 for a private project (2026-10-30).
+// sends none, and Bitbucket then answers as to anyone: it shows a private workspace's details,
+// lists only its public projects and answers 404 for a private project.
 type Credential interface {
 	// check returns ErrInvalidConfig when a part of the credential is missing.
 	check() error
@@ -20,14 +20,18 @@ type Credential interface {
 // APIToken is an Atlassian account's API token, sent with the account's email address as Basic
 // authentication.
 type APIToken struct {
+	// Email is the email address of the Atlassian account the token belongs to.
 	Email string
+	// Token is the API token itself.
 	Token string
 }
 
 // OAuthConsumer is a workspace's OAuth consumer: the Client trades its key and secret for an
 // access token with the client credentials grant.
 type OAuthConsumer struct {
-	Key    string
+	// Key is the consumer's key, from the workspace's OAuth consumer settings.
+	Key string
+	// Secret is the consumer's secret, from the same settings.
 	Secret string
 }
 

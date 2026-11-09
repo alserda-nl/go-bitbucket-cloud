@@ -13,8 +13,10 @@ import (
 type ListOption func(*listSettings)
 
 type listSettings struct {
+	// pageSize is the page size to ask for.
 	pageSize int
-	limit    int
+	// limit is how many items the list stops after, when limited.
+	limit int
 	// limited tells a WithLimit(0) from no limit; WithFullWalk clears it.
 	limited bool
 }
@@ -36,11 +38,12 @@ func WithFullWalk() ListOption {
 }
 
 // page is the wrapper every list answers with. Only a missing next ends a list: pagelen is the
-// page size in some lists and the number of items on the page in others (2026-10-26), so it
-// decides nothing.
+// page size in some lists and the number of items on the page in others, so it decides nothing.
 type page[T any] struct {
-	Values []T    `json:"values"`
-	Next   string `json:"next"`
+	// Values are the page's items.
+	Values []T `json:"values"`
+	// Next is the address of the next page, empty on the last.
+	Next string `json:"next"`
 }
 
 // list fetches the list at the API path made of segments, page by page, asking for pages of the
@@ -104,8 +107,8 @@ func onPage(err error, pageNumber int) error {
 // nextPage returns the address of a list's next page. A next link into the 2.0 API on the
 // client's own endpoint is followed as given. For any other link it asks the list's own path for
 // the page number the link names: a schedule's executions answer a relative link outside the 2.0
-// API, while ?page=2 on the 2.0 path works (2026-10-26). A link without a page number ends the
-// list with an error.
+// API, while ?page=2 on the 2.0 path works. A link without a page number ends the list with an
+// error.
 func (c *Client) nextPage(first *url.URL, next string) (*url.URL, error) {
 	link, err := c.endpoint.Parse(next)
 	if err != nil {

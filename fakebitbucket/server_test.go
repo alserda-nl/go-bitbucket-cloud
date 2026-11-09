@@ -100,7 +100,7 @@ func TestServer_AnswersAProjectWithItsOwnerAndWorkspaceInTheShortForms(t *testin
 	embedded, _ := actual.body["workspace"].(map[string]any)
 	owner, _ := actual.body["owner"].(map[string]any)
 	assert.Equal(t, []string{"links", "name", "slug", "type", "uuid"}, slices.Sorted(maps.Keys(embedded)))
-	// The owner is a team: no account ID or nickname (2026-10-14).
+	// The owner is a team, which has no account ID or nickname.
 	assert.Equal(t, []string{"display_name", "links", "type", "username", "uuid"}, slices.Sorted(maps.Keys(owner)))
 	assert.Equal(t, http.StatusNotFound, lowercase.status, "a project key is case-sensitive")
 	assert.Equal(t, recordedBody(t, "errors/project-not-found.json"), lowercase.body)

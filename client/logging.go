@@ -8,10 +8,12 @@ import (
 
 // loggingTransport logs one line per attempt: the method, the path, the status, the attempt's
 // number and how long it took until the answer's headers. Never the query, a header or a body: a
-// pipeline cache's download address carried a signed token in its query (2026-10-26), a
-// variable's body carries its value, and a header the credential.
+// pipeline cache's download address carries a signed token in its query, a variable's body
+// carries its value, and a header the credential.
 type loggingTransport struct {
-	next   http.RoundTripper
+	// next sends the request on.
+	next http.RoundTripper
+	// logger gets the lines.
 	logger *slog.Logger
 }
 

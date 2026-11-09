@@ -22,15 +22,15 @@ type loginSettings struct {
 type withoutCredentialKey struct{}
 
 // withoutCredential marks a call that Bitbucket refuses with every API token but answers without
-// a credential: the two webhook event lists and the Pipelines OpenID Connect configuration and keys
-// (2026-10-20).
+// a credential: the two webhook event lists and the Pipelines OpenID Connect configuration and
+// keys.
 func withoutCredential(ctx context.Context) context.Context {
 	return context.WithValue(ctx, withoutCredentialKey{}, true)
 }
 
 // getsCredential reports whether a request carries the credential: only a request to the
 // client's own endpoint, its scheme and host, so a redirect elsewhere never does (a step log
-// redirected to a signed Amazon S3 address on 2026-10-26), and no call marked withoutCredential.
+// redirects to a signed Amazon S3 address), and no call marked withoutCredential.
 func getsCredential(req *http.Request, endpoint *url.URL) bool {
 	if req.Context().Value(withoutCredentialKey{}) != nil {
 		return false
@@ -46,10 +46,14 @@ func onEndpoint(address, endpoint *url.URL) bool {
 
 // basicLogin sends an API token as Basic authentication.
 type basicLogin struct {
-	next     http.RoundTripper
+	// next sends the request on.
+	next http.RoundTripper
+	// endpoint is the API's address: only a request to it gets the credential.
 	endpoint *url.URL
-	email    string
-	token    string
+	// email is the email address of the token's Atlassian account.
+	email string
+	// token is the API token.
+	token string
 }
 
 // RoundTrip adds the credential to a copy of the request, as the http.RoundTripper contract asks.

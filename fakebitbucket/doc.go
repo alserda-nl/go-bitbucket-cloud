@@ -9,13 +9,12 @@
 //
 // Where it knowingly differs from Bitbucket:
 //   - A timestamp ends in "Z" where Bitbucket writes "+00:00". A project without a description has
-//     "", where Bitbucket answered null for one created through the API (2026-10-14) and "" for
-//     most older ones (2026-10-12).
+//     "", where Bitbucket answers null for a description that was never set.
 //   - A refused credential answers 401 in the repository endpoints' error shape; Bitbucket's own
 //     answer to one is not recorded. The token address answers a refused consumer as RFC 6749,
 //     section 5.2, describes.
 //   - A list page has no "previous" link, which Bitbucket gives from the second page on, and an
-//     avatar link has no "?ts=" query (2026-10-12).
+//     avatar link has no "?ts=" query.
 //   - A list or a project in a workspace that does not exist answers the workspace's 404, which is
 //     not recorded either.
 //   - A path it has no route for answers 501, so a call to a wrong address fails instead of looking

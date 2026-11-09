@@ -47,8 +47,11 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 
 // errorAnswer is the repository endpoints' error answer: {"type": "error", "error": {"message": ...}}.
 type errorAnswer struct {
-	Type  string `json:"type"`
+	// Type is "error".
+	Type string `json:"type"`
+	// Error holds the error's message.
 	Error struct {
+		// Message describes the error.
 		Message string `json:"message"`
 	} `json:"error"`
 }
@@ -64,7 +67,7 @@ func writeError(w http.ResponseWriter, status int, message string) {
 // writePage answers one page of a list as Bitbucket's repository endpoints do: pagelen is the page
 // size asked, or defaultPageSize when none was; size is the total; next is the same address with
 // the next page number, missing on the last page. A page size outside 1 to largestPage answers
-// 400 "Invalid pagelen" (2026-10-30, for 101 and 1000).
+// 400 "Invalid pagelen", as Bitbucket answers 101 and 1000.
 func writePage(w http.ResponseWriter, r *http.Request, items []any, defaultPageSize, largestPage int) {
 	query := r.URL.Query()
 	pageSize := defaultPageSize

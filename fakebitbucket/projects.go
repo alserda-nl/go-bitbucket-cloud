@@ -12,16 +12,16 @@ import (
 )
 
 const (
-	// projectsDefaultPage is the projects list's page size when none is asked (2026-10-14).
+	// projectsDefaultPage is the projects list's page size when none is asked.
 	projectsDefaultPage = 50
-	// projectsLargestPage is the largest it takes: 101 answered 400 (2026-10-30).
+	// projectsLargestPage is the largest it takes: Bitbucket refuses 101 with 400.
 	projectsLargestPage = 100
 )
 
 //go:embed samples/project.json
 var projectSample []byte
 
-// projectNotFoundSample is Bitbucket's answer for a project that is not there, or not visible (2026-10-30).
+// projectNotFoundSample is Bitbucket's answer for a project that is not there, or not visible.
 //
 //go:embed samples/errors/project-not-found.json
 var projectNotFoundSample []byte
@@ -75,6 +75,7 @@ func (ProjectOptionSet) WithWorkspace(workspace models.Workspace) ProjectOption 
 
 // storedProject is a project as the fake keeps it, with what it needs to answer as Bitbucket does.
 type storedProject struct {
+	// project is the project as SeedProject stored it.
 	project models.Project
 	// seeded is the project's place in the order SeedProject stored projects in.
 	seeded int
@@ -102,7 +103,7 @@ func (s *Server) SeedProject(project models.Project) models.Project {
 }
 
 // HideProject makes a project SeedProject stored answer 404 to its next reads, as many as reads,
-// as a new project did for at least 38 seconds on 2026-10-26.
+// as a new project can for 38 seconds and more after its create.
 func (s *Server) HideProject(project models.Project, reads int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -130,8 +131,8 @@ func (s *Server) handleGetProject(w http.ResponseWriter, r *http.Request, worksp
 	writeJSON(w, http.StatusOK, projectAnswer(stored.project, workspace))
 }
 
-// handleListProjects lists the newest project first, as Bitbucket did from 2026-10-12 to
-// 2026-10-30; here the newest is the one seeded last.
+// handleListProjects lists the newest project first, as Bitbucket does; here the newest is the one
+// seeded last.
 func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request, workspace models.Workspace) {
 	newestFirst := func(a, b *storedProject) int {
 		return cmp.Compare(b.seeded, a.seeded)
@@ -161,7 +162,7 @@ func projectAnswer(project models.Project, workspace models.Workspace) any {
 	}
 }
 
-// projectLinks returns a project's links as Bitbucket writes them (2026-10-14).
+// projectLinks returns a project's links as Bitbucket writes them.
 func projectLinks(workspaceSlug, key string) models.ProjectLinks {
 	html := fmt.Sprintf("https://bitbucket.org/%s/workspace/projects/%s", workspaceSlug, key)
 

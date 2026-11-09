@@ -25,11 +25,15 @@ const (
 // Client calls Bitbucket Cloud's REST API. Its calls are grouped per area, as Atlassian's API
 // reference groups them.
 type Client struct {
-	Projects   *ProjectsArea
+	// Projects holds the calls of the Projects group.
+	Projects *ProjectsArea
+	// Workspaces holds the calls of the Workspaces group.
 	Workspaces *WorkspacesArea
 
+	// httpClient sends every request through the retries, the login and the log.
 	httpClient *http.Client
-	endpoint   *url.URL
+	// endpoint is the API's address, without a trailing slash.
+	endpoint *url.URL
 }
 
 // Option changes how New makes a Client.
@@ -37,12 +41,18 @@ type Option func(*config)
 
 // config is what the options set.
 type config struct {
-	endpoint      string
+	// endpoint is the API's address, set by WithEndpoint.
+	endpoint string
+	// oauthTokenURL is where an OAuth consumer asks for its access token, set by WithOAuthTokenURL.
 	oauthTokenURL string
-	httpClient    *http.Client
-	maxRetries    int
-	retryWait     time.Duration
-	logger        *slog.Logger
+	// httpClient is the client whose transport the Client wraps, set by WithHTTPClient.
+	httpClient *http.Client
+	// maxRetries is how often an answer that allows it is tried again, set by WithMaxRetries.
+	maxRetries int
+	// retryWait is the first wait before trying again, set by WithRetryWait.
+	retryWait time.Duration
+	// logger gets one line per attempt, set by WithLogger; nil logs nothing.
+	logger *slog.Logger
 }
 
 // WithEndpoint sets the API's address, https://api.bitbucket.org by default; tests point it at the fake.

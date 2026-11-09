@@ -25,7 +25,7 @@ type WorkspaceOptionSet struct{}
 var Workspace WorkspaceOptionSet
 
 // NewWorkspace returns a workspace as Bitbucket answers one, with a slug, a name and a UUID no
-// other builder call returns. A workspace's name need not be its slug (2026-10-12).
+// other builder call returns. A workspace's name need not be its slug.
 func NewWorkspace(opts ...WorkspaceOption) models.Workspace {
 	var workspace models.Workspace
 	decodeSample(workspaceSample, &workspace)
@@ -81,7 +81,7 @@ func handleGetWorkspace(w http.ResponseWriter, _ *http.Request, workspace models
 }
 
 // findWorkspace finds a workspace by its slug, in any case, or its UUID in braces; s.mu is held.
-// A UUID without braces finds nothing (2026-10-19).
+// A UUID without braces finds nothing.
 func (s *Server) findWorkspace(identifier string) (models.Workspace, bool) {
 	if workspace, found := s.workspaces[strings.ToLower(identifier)]; found {
 		return workspace, true
@@ -95,12 +95,12 @@ func (s *Server) findWorkspace(identifier string) (models.Workspace, bool) {
 	return models.Workspace{}, false
 }
 
-// writeWorkspaceNotFound answers as Bitbucket answered a workspace that does not exist (2026-10-19).
+// writeWorkspaceNotFound answers as Bitbucket answers a workspace that does not exist.
 func writeWorkspaceNotFound(w http.ResponseWriter, identifier string) {
 	writeError(w, http.StatusNotFound, fmt.Sprintf("No workspace with identifier '%s'.", identifier))
 }
 
-// workspaceLinks returns a workspace's links as Bitbucket writes them (2026-10-19).
+// workspaceLinks returns a workspace's links as Bitbucket writes them.
 func workspaceLinks(slug string) models.WorkspaceLinks {
 	api := fmt.Sprintf("https://api.bitbucket.org/2.0/workspaces/%s", slug)
 
@@ -120,18 +120,26 @@ func workspaceLinks(slug string) models.WorkspaceLinks {
 
 // workspaceReference is the short form of a workspace that Bitbucket embeds in another object.
 type workspaceReference struct {
+	// Links are the workspace's picture, page and address in the API.
 	Links referenceLinks `json:"links"`
-	Name  string         `json:"name"`
-	Slug  string         `json:"slug"`
-	Type  string         `json:"type"`
-	UUID  models.UUID    `json:"uuid"`
+	// Name is the workspace's name.
+	Name string `json:"name"`
+	// Slug is the workspace's slug.
+	Slug string `json:"slug"`
+	// Type is "workspace".
+	Type string `json:"type"`
+	// UUID is the workspace's UUID.
+	UUID models.UUID `json:"uuid"`
 }
 
 // referenceLinks are the links of an embedded workspace.
 type referenceLinks struct {
+	// Avatar is the address of the workspace's picture.
 	Avatar models.Link `json:"avatar"`
-	HTML   models.Link `json:"html"`
-	Self   models.Link `json:"self"`
+	// HTML is the workspace's page on bitbucket.org.
+	HTML models.Link `json:"html"`
+	// Self is the workspace's address in the API.
+	Self models.Link `json:"self"`
 }
 
 func workspaceReferenceTo(workspace models.Workspace) workspaceReference {
@@ -149,13 +157,18 @@ func workspaceReferenceTo(workspace models.Workspace) workspaceReference {
 }
 
 // teamReference is a team account as Bitbucket embeds one, a project's owner: it has a username,
-// and no account ID or nickname (2026-10-14).
+// and no account ID or nickname.
 type teamReference struct {
-	DisplayName string              `json:"display_name"`
-	Links       models.AccountLinks `json:"links"`
-	Type        string              `json:"type"`
-	Username    string              `json:"username"`
-	UUID        models.UUID         `json:"uuid"`
+	// DisplayName is the team's name, its workspace's name.
+	DisplayName string `json:"display_name"`
+	// Links are the team's picture, page and address in the API.
+	Links models.AccountLinks `json:"links"`
+	// Type is "team".
+	Type string `json:"type"`
+	// Username is the team's username.
+	Username string `json:"username"`
+	// UUID is the team's UUID, its workspace's UUID.
+	UUID models.UUID `json:"uuid"`
 }
 
 func teamReferenceTo(account models.Account) teamReference {
@@ -169,7 +182,7 @@ func teamReferenceTo(account models.Account) teamReference {
 }
 
 // ownerOf returns the team account Bitbucket names as the owner of a workspace's projects: the
-// workspace itself, under the team's username, which need not be the workspace's slug (2026-10-14).
+// workspace itself, under the team's username, which need not be the workspace's slug.
 func ownerOf(workspace models.Workspace, username string) models.Account {
 	escapedUUID := url.PathEscape(workspace.UUID)
 

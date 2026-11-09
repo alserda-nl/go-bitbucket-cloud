@@ -21,9 +21,12 @@ type attemptKey struct{}
 // times. It waits firstWait, doubling up to longestWait, plus or minus 20 percent; a Retry-After
 // header, which Bitbucket does not document, wins when it comes. Connection errors are not tried again.
 type retryTransport struct {
-	next       http.RoundTripper
+	// next sends each attempt.
+	next http.RoundTripper
+	// maxRetries is how often an answer that allows it is tried again.
 	maxRetries int
-	firstWait  time.Duration
+	// firstWait is the wait before the second attempt, doubled for each one after it.
+	firstWait time.Duration
 	// repeatable says every request through it can be sent twice without harm, as the OAuth token
 	// request can: a POST is then tried again after a 5xx too.
 	repeatable bool

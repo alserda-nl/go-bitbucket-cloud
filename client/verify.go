@@ -10,7 +10,7 @@ import (
 
 const (
 	// defaultVerifyInterval and defaultVerifyMaxAttempts wait about a minute, longer than the 38
-	// seconds a new project was seen to answer 404 (2026-10-26), at most 20 requests per object.
+	// seconds a new project was seen answering 404, in at most 20 requests per object.
 	defaultVerifyInterval    = 3 * time.Second
 	defaultVerifyMaxAttempts = 20
 )
@@ -23,7 +23,9 @@ var ErrNotVerified = errors.New("bitbucket: the object did not read back as expe
 type VerifyOption func(*verifySettings)
 
 type verifySettings struct {
-	interval    time.Duration
+	// interval is the time between two reads.
+	interval time.Duration
+	// maxAttempts is how many reads Verify makes at most.
 	maxAttempts int
 }
 
@@ -39,7 +41,7 @@ func WithMaxAttempts(maxAttempts int) VerifyOption {
 
 // Verify reads until check says the object is there as expected: the first read at once, then one
 // every interval, at most maxAttempts reads. Bitbucket's answers cannot be trusted right after a
-// write: a new project answered 404 for at least 38 seconds (2026-10-26).
+// write: a new project can answer 404 for 38 seconds and more.
 //
 // check returns true when the read matched, false to read again (a value not there yet), or an
 // error. A check that finds a value other than the one written can return false with an error
