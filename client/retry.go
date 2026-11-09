@@ -77,6 +77,12 @@ func (r *retryTransport) retryable(method string, status int) bool {
 	}
 }
 
+// temporary reports whether a status blames Bitbucket or the moment rather than the request: a 429
+// or a 5xx. retryable tries a narrower set again.
+func temporary(status int) bool {
+	return status == http.StatusTooManyRequests || status >= http.StatusInternalServerError
+}
+
 // waitFor returns the wait before the next attempt: Retry-After when the answer has a usable one,
 // otherwise firstWait doubled per attempt, capped at longestWait, plus or minus 20 percent.
 func (r *retryTransport) waitFor(attempt int, response *http.Response) time.Duration {

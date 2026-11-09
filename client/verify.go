@@ -65,14 +65,14 @@ func Verify(ctx context.Context, check func(context.Context) (bool, error), opts
 
 		// A read the context ended is as good as the reads running out: the object was written.
 		if ctx.Err() != nil {
-			return fmt.Errorf("%w (reads: %d): %w", ErrNotVerified, attempt, context.Cause(ctx))
+			return endedEarly(attempt, context.Cause(ctx))
 		}
 		if attempt == settings.maxAttempts || (err != nil && !readAgain(err)) {
 			return notVerified(attempt, err)
 		}
 
 		if err := sleep(ctx, settings.interval); err != nil {
-			return fmt.Errorf("%w (reads: %d): %w", ErrNotVerified, attempt, err)
+			return endedEarly(attempt, err)
 		}
 	}
 }
@@ -90,7 +90,12 @@ func readAgain(err error) bool {
 		return true
 	}
 
-	return apiErr.StatusCode == http.StatusNotFound || apiErr.StatusCode == http.StatusTooManyRequests || apiErr.StatusCode >= http.StatusInternalServerError
+	return apiErr.StatusCode == http.StatusNotFound || temporary(apiErr.StatusCode)
+}
+
+// endedEarly is Verify's error when ctx ended the reads: it matches ErrNotVerified and cause.
+func endedEarly(reads int, cause error) error {
+	return fmt.Errorf("%w (reads: %d): %w", ErrNotVerified, reads, cause)
 }
 
 // notVerified is Verify's error when its reads end, naming the last read's error, if any, as text.

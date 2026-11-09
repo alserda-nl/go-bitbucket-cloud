@@ -87,6 +87,19 @@ type tokenSource struct {
 	expiresAt time.Time
 }
 
+// newTokenSource returns a tokenSource that asks tokenURL for access tokens with the consumer's key
+// and secret, sending the request through transport.
+func newTokenSource(transport http.RoundTripper, tokenURL, key, secret string) *tokenSource {
+	return &tokenSource{
+		transport: transport,
+		tokenURL:  tokenURL,
+		key:       key,
+		secret:    secret,
+		now:       time.Now,
+		lock:      make(chan struct{}, 1),
+	}
+}
+
 // current returns the token, asking for one when there is none or the current one has expired.
 func (s *tokenSource) current(ctx context.Context) (string, error) {
 	return s.whileLocked(ctx, func() (string, error) {

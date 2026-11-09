@@ -38,21 +38,19 @@ func (s *tokenServer) RoundTrip(req *http.Request) (*http.Response, error) {
 	return stubResponse(http.StatusOK, nil, fmt.Sprintf(`{"access_token": "token-%d", "expires_in": %d, "token_type": "bearer"}`, s.grants, s.expiresIn)), nil
 }
 
-func newTokenSource(transport http.RoundTripper, now func() time.Time) *tokenSource {
-	return &tokenSource{
-		transport: transport,
-		tokenURL:  tokenAddress,
-		key:       "key",
-		secret:    "secret",
-		now:       now,
-		lock:      make(chan struct{}, 1),
-	}
+// newTestTokenSource returns the token source the login makes, asking tokenAddress as key and
+// secret, with now as its clock.
+func newTestTokenSource(transport http.RoundTripper, now func() time.Time) *tokenSource {
+	tokens := newTokenSource(transport, tokenAddress, "key", "secret")
+	tokens.now = now
+
+	return tokens
 }
 
 func TestTokenSource_ARequestWaitingForTheTokenLeavesWhenItsContextEnds(t *testing.T) {
 	fetching := make(chan struct{})
 	release := make(chan struct{})
-	tokens := newTokenSource(roundTripFunc(func(*http.Request) (*http.Response, error) {
+	tokens := newTestTokenSource(roundTripFunc(func(*http.Request) (*http.Response, error) {
 		close(fetching)
 		<-release
 
@@ -77,7 +75,7 @@ func TestTokenSource_ARequestWaitingForTheTokenLeavesWhenItsContextEnds(t *testi
 func TestTokenSource_KeepsATokenUntilItExpires(t *testing.T) {
 	server := &tokenServer{expiresIn: 3600}
 	clock := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
-	tokens := newTokenSource(server, func() time.Time { return clock })
+	tokens := newTestTokenSource(server, func() time.Time { return clock })
 
 	first, err := tokens.current(t.Context())
 	require.NoError(t, err)
@@ -96,7 +94,7 @@ func TestTokenSource_KeepsATokenUntilItExpires(t *testing.T) {
 
 func TestTokenSource_RenewsOnlyATokenNobodyRenewedYet(t *testing.T) {
 	server := &tokenServer{expiresIn: 3600}
-	tokens := newTokenSource(server, time.Now)
+	tokens := newTestTokenSource(server, time.Now)
 
 	stale, err := tokens.current(t.Context())
 	require.NoError(t, err)
@@ -174,7 +172,7 @@ func TestTokenSource_Fails(t *testing.T) {
 
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			tokens := newTokenSource(testCase.transport, time.Now)
+			tokens := newTestTokenSource(testCase.transport, time.Now)
 			tokens.tokenURL = testCase.tokenURL
 
 			_, err := tokens.current(t.Context())
@@ -188,7 +186,7 @@ func TestTokenSource_Fails(t *testing.T) {
 func TestTokenSource_ATokenAddressThatAnswers404IsNoObjectNotFound(t *testing.T) {
 	// A wrong token address must not read as a missing object: a provider drops a resource from
 	// state on a 404.
-	tokens := newTokenSource(roundTripFunc(func(*http.Request) (*http.Response, error) {
+	tokens := newTestTokenSource(roundTripFunc(func(*http.Request) (*http.Response, error) {
 		return stubResponse(http.StatusNotFound, http.Header{"Content-Type": {"application/json"}}, `{"type": "error", "error": {"message": "Resource not found"}}`), nil
 	}), time.Now)
 
@@ -236,7 +234,7 @@ func TestTokenSource_FollowsNoRedirect(t *testing.T) {
 	transport := &recordingTransport{responses: []*http.Response{
 		stubResponse(http.StatusFound, http.Header{"Location": {"http://bitbucket.org/site/oauth2/access_token"}}, ""),
 	}}
-	tokens := newTokenSource(transport, time.Now)
+	tokens := newTestTokenSource(transport, time.Now)
 
 	_, err := tokens.current(t.Context())
 

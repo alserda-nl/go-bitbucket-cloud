@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"time"
 )
 
 // A Credential logs a Client in to Bitbucket: an APIToken or an OAuthConsumer. A nil Credential
@@ -103,13 +102,6 @@ func (o OAuthConsumer) newLogin(login loginSettings) http.RoundTripper {
 	return &bearerLogin{
 		next:     login.next,
 		endpoint: login.endpoint,
-		tokens: &tokenSource{
-			transport: login.tokenTransport,
-			tokenURL:  login.tokenURL,
-			key:       o.Key,
-			secret:    o.Secret,
-			now:       time.Now,
-			lock:      make(chan struct{}, 1),
-		},
+		tokens:   newTokenSource(login.tokenTransport, login.tokenURL, o.Key, o.Secret),
 	}
 }

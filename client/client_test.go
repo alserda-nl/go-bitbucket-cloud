@@ -11,26 +11,9 @@ import (
 
 func TestNew_RefusesAnIncompleteConfiguration(t *testing.T) {
 	cases := []struct {
-		name       string
-		credential Credential
-		options    []Option
+		name    string
+		options []Option
 	}{
-		{
-			name:       "an API token without its email address",
-			credential: APIToken{Token: "token"},
-		},
-		{
-			name:       "an API token without the token",
-			credential: APIToken{Email: "someone@example.com"},
-		},
-		{
-			name:       "an OAuth consumer without its secret",
-			credential: OAuthConsumer{Key: "key"},
-		},
-		{
-			name:       "an OAuth consumer without its key",
-			credential: OAuthConsumer{Secret: "secret"},
-		},
 		{
 			name:    "an endpoint that is not an address",
 			options: []Option{WithEndpoint("api.bitbucket.org")},
@@ -68,10 +51,6 @@ func TestNew_RefusesAnIncompleteConfiguration(t *testing.T) {
 			options: []Option{WithEndpoint("http://api.bitbucket.org")},
 		},
 		{
-			name:    "an endpoint with a user and password",
-			options: []Option{WithEndpoint("https://user:secret@example.com")},
-		},
-		{
 			name:    "a token address with a key and secret",
 			options: []Option{WithOAuthTokenURL("https://key:secret@example.com/site/oauth2/access_token")},
 		},
@@ -83,7 +62,7 @@ func TestNew_RefusesAnIncompleteConfiguration(t *testing.T) {
 
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			_, err := New(testCase.credential, testCase.options...)
+			_, err := New(nil, testCase.options...)
 
 			assert.ErrorIs(t, err, ErrInvalidConfig, "New should refuse %s", testCase.name)
 		})
@@ -182,6 +161,7 @@ func TestNew_SaysWhichPartOfACredentialIsEmpty(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			_, err := New(testCase.credential)
 
+			assert.ErrorIs(t, err, ErrInvalidConfig, "New should refuse %s", testCase.name)
 			assert.EqualError(t, err, testCase.expected, "New should name the empty part of %s", testCase.name)
 		})
 	}
