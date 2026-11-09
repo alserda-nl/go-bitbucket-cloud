@@ -102,19 +102,19 @@ func writeWorkspaceNotFound(w http.ResponseWriter, identifier string) {
 
 // workspaceLinks returns a workspace's links as Bitbucket writes them.
 func workspaceLinks(slug string) models.WorkspaceLinks {
-	api := fmt.Sprintf("https://api.bitbucket.org/2.0/workspaces/%s", slug)
+	api := fmt.Sprintf("%s/workspaces/%s", apiAddress, slug)
 
 	return models.WorkspaceLinks{
-		Avatar:       models.Link{Href: fmt.Sprintf("https://bitbucket.org/workspaces/%s/avatar/", slug)},
+		Avatar:       models.Link{Href: fmt.Sprintf("%s/workspaces/%s/avatar/", webAddress, slug)},
 		Hooks:        models.Link{Href: fmt.Sprintf("%s/hooks", api)},
-		HTML:         models.Link{Href: fmt.Sprintf("https://bitbucket.org/%s/", slug)},
-		HTMLOverview: models.Link{Href: fmt.Sprintf("https://bitbucket.org/%s/workspace/overview/", slug)},
+		HTML:         models.Link{Href: fmt.Sprintf("%s/%s/", webAddress, slug)},
+		HTMLOverview: models.Link{Href: fmt.Sprintf("%s/%s/workspace/overview/", webAddress, slug)},
 		Members:      models.Link{Href: fmt.Sprintf("%s/members", api)},
 		Owners:       models.Link{Href: fmt.Sprintf("%s/members?q=permission%%3D%%22owner%%22", api)},
 		Projects:     models.Link{Href: fmt.Sprintf("%s/projects", api)},
-		Repositories: models.Link{Href: fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s", slug)},
+		Repositories: models.Link{Href: fmt.Sprintf("%s/repositories/%s", apiAddress, slug)},
 		Self:         models.Link{Href: api},
-		Snippets:     models.Link{Href: fmt.Sprintf("https://api.bitbucket.org/2.0/snippets/%s", slug)},
+		Snippets:     models.Link{Href: fmt.Sprintf("%s/snippets/%s", apiAddress, slug)},
 	}
 }
 
@@ -189,9 +189,9 @@ func ownerOf(workspace models.Workspace, username string) models.Account {
 	return models.Account{
 		DisplayName: workspace.Name,
 		Links: models.AccountLinks{
-			Avatar: models.Link{Href: fmt.Sprintf("https://bitbucket.org/account/%s/avatar/", username)},
-			HTML:   models.Link{Href: fmt.Sprintf("https://bitbucket.org/%s/", escapedUUID)},
-			Self:   models.Link{Href: fmt.Sprintf("https://api.bitbucket.org/2.0/workspaces/%s", escapedUUID)},
+			Avatar: models.Link{Href: fmt.Sprintf("%s/account/%s/avatar/", webAddress, username)},
+			HTML:   models.Link{Href: fmt.Sprintf("%s/%s/", webAddress, escapedUUID)},
+			Self:   models.Link{Href: fmt.Sprintf("%s/workspaces/%s", apiAddress, escapedUUID)},
 		},
 		Type:     "team",
 		Username: username,

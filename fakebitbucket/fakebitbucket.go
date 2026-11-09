@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -24,6 +25,12 @@ const (
 
 // TokenPath is the token address's path: point client.WithOAuthTokenURL at URL + TokenPath.
 const TokenPath = "/site/oauth2/access_token" //nolint:gosec // a path, not a credential
+
+// The addresses Bitbucket's links start with: the API's and the web pages'.
+const (
+	apiAddress = "https://api.bitbucket.org/2.0"
+	webAddress = "https://bitbucket.org"
+)
 
 // The kinds of credential a Request can carry.
 const (
@@ -111,9 +118,7 @@ func (s *Server) FailNext(status, times int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for range times {
-		s.failures = append(s.failures, status)
-	}
+	s.failures = append(s.failures, slices.Repeat([]int{status}, times)...)
 }
 
 // Requests returns every request the fake received, the first first.
@@ -121,7 +126,7 @@ func (s *Server) Requests() []Request {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return append([]Request(nil), s.requests...)
+	return slices.Clone(s.requests)
 }
 
 // intercept records every request, answers the failures FailNext asked for and refuses a

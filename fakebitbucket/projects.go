@@ -169,12 +169,12 @@ func projectAnswer(project models.Project, workspace models.Workspace) any {
 
 // projectLinks returns a project's links as Bitbucket writes them.
 func projectLinks(workspaceSlug, key string) models.ProjectLinks {
-	html := fmt.Sprintf("https://bitbucket.org/%s/workspace/projects/%s", workspaceSlug, key)
+	html := fmt.Sprintf("%s/%s/workspace/projects/%s", webAddress, workspaceSlug, key)
 
 	return models.ProjectLinks{
 		Avatar:       models.Link{Href: fmt.Sprintf("%s/avatar/32", html)},
 		HTML:         models.Link{Href: html},
-		Repositories: models.Link{Href: fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s?q=project.key=%q", workspaceSlug, key)},
-		Self:         models.Link{Href: fmt.Sprintf("https://api.bitbucket.org/2.0/workspaces/%s/projects/%s", workspaceSlug, key)},
+		Repositories: models.Link{Href: fmt.Sprintf("%s/repositories/%s?q=project.key=%q", apiAddress, workspaceSlug, key)},
+		Self:         models.Link{Href: fmt.Sprintf("%s/workspaces/%s/projects/%s", apiAddress, workspaceSlug, key)},
 	}
 }

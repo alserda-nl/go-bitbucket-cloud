@@ -363,13 +363,10 @@ func TestServer_AnswersAPathWithoutARouteWith501(t *testing.T) {
 func recordedBody(t *testing.T, name string) map[string]any {
 	t.Helper()
 
-	file, err := os.ReadFile(fmt.Sprintf("samples/%s", name))
-	require.NoError(t, err)
-
 	var sample struct {
 		Body map[string]any `json:"body"`
 	}
-	require.NoError(t, json.Unmarshal(file, &sample))
+	require.NoError(t, json.Unmarshal(readSample(t, name), &sample))
 
 	return sample.Body
 }
