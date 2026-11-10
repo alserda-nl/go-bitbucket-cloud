@@ -19,6 +19,19 @@ func readSample(t *testing.T, name string) []byte {
 	return sample
 }
 
+// fieldsLostDecoding decodes the sample named sample into a T and returns what missingFields
+// returns for the two: fieldsLostDecoding[models.Project](t, "project.json").
+func fieldsLostDecoding[T any](t *testing.T, sample string) []string {
+	t.Helper()
+
+	answer := readSample(t, sample)
+
+	var decoded T
+	require.NoError(t, json.Unmarshal(answer, &decoded))
+
+	return missingFields(t, answer, &decoded)
+}
+
 // missingFields returns each field of sample that the model decoded from it does not give back,
 // or gives back as another JSON type: ".links.self: missing". A field only the model has is fine,
 // as a short form leaves fields zero.

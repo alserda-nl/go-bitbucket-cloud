@@ -63,8 +63,8 @@ type Server struct {
 
 	// mu guards every field below.
 	mu sync.Mutex
-	// workspaces holds the seeded workspaces by their slug in lowercase, as Bitbucket finds a
-	// workspace by its slug in any case.
+	// workspaces holds the seeded workspaces by their slug in lowercase, as Bitbucket's 2.0 API finds
+	// a workspace by its slug in any case (the 1.0 API refuses capitals).
 	workspaces map[string]models.Workspace
 	// projects holds the seeded projects by their workspace's UUID, then by their key, which is
 	// case-sensitive.

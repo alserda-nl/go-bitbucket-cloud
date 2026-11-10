@@ -1,8 +1,8 @@
 package models
 
-// Account is a user or a team as another object embeds it, such as a project's owner.
+// Account is a user, an app user or a team as another object embeds it, such as a project's owner.
 type Account struct {
-	// AccountID is a user's Atlassian account ID; a team has none.
+	// AccountID is a user's or an app user's Atlassian account ID; a team has none.
 	AccountID string `json:"account_id"`
 	// DisplayName is the account's name as Bitbucket shows it.
 	DisplayName string `json:"display_name"`
@@ -10,7 +10,7 @@ type Account struct {
 	Links AccountLinks `json:"links"`
 	// Nickname is the name a user chose; it need not be unique, and a team has none.
 	Nickname string `json:"nickname"`
-	// Type is "team" or "user".
+	// Type is "team", "user" or "app_user".
 	Type string `json:"type"`
 	// Username is a team's username, which need not be its workspace's slug; a user has none.
 	Username string `json:"username"`

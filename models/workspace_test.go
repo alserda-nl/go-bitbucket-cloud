@@ -12,12 +12,7 @@ import (
 )
 
 func TestWorkspace_DecodingKeepsEveryRecordedField(t *testing.T) {
-	sample := readSample(t, "workspace.json")
-
-	var workspace models.Workspace
-	require.NoError(t, json.Unmarshal(sample, &workspace))
-
-	assert.Empty(t, missingFields(t, sample, &workspace), "decoding workspace.json")
+	assert.Empty(t, fieldsLostDecoding[models.Workspace](t, "workspace.json"), "json.Unmarshal of workspace.json into a models.Workspace should keep every field")
 }
 
 // TestWorkspace_EachFieldDecodesFromItsOwnKey decodes documents whose values all differ, so a field

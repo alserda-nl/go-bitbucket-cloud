@@ -25,8 +25,8 @@ type Workspace struct {
 	IsPersonal bool `json:"is_personal"`
 	// IsPrivacyEnforced is true when the workspace allows no public content, such as a public repository.
 	IsPrivacyEnforced bool `json:"is_privacy_enforced"`
-	// IsPrivate is true when the workspace's content is for its members only; Bitbucket still answers
-	// the workspace's own details to anyone.
+	// IsPrivate is true when the workspace is private. Bitbucket still answers its details to anyone,
+	// and a private workspace can hold public projects anyone may read, which IsPrivacyEnforced forbids.
 	IsPrivate bool `json:"is_private"`
 	// Links are the workspace's picture, its pages on bitbucket.org and the API addresses of its
 	// members, owners, projects, repositories, snippets and webhooks.
@@ -36,8 +36,8 @@ type Workspace struct {
 	// SignSystemCommits is left out of Bitbucket's specification and its answers hold null, so its
 	// type is unknown and it stays raw JSON.
 	SignSystemCommits json.RawMessage `json:"sign_system_commits"`
-	// Slug names the workspace in addresses, such as acme in bitbucket.org/acme. It is lowercase,
-	// and Bitbucket finds the workspace by it in any case.
+	// Slug names the workspace in addresses, such as acme in bitbucket.org/acme. It is lowercase, and
+	// Bitbucket's 2.0 API finds the workspace by it in any case (the 1.0 API refuses capitals).
 	Slug string `json:"slug"`
 	// Type is "workspace".
 	Type string `json:"type"`

@@ -13,12 +13,7 @@ import (
 )
 
 func TestProject_DecodingKeepsEveryRecordedField(t *testing.T) {
-	sample := readSample(t, "project.json")
-
-	var project models.Project
-	require.NoError(t, json.Unmarshal(sample, &project))
-
-	assert.Empty(t, missingFields(t, sample, &project), "decoding project.json")
+	assert.Empty(t, fieldsLostDecoding[models.Project](t, "project.json"), "json.Unmarshal of project.json into a models.Project should keep every field")
 }
 
 // TestProject_EachFieldDecodesFromItsOwnKey decodes a document whose values all differ, so a field
