@@ -69,9 +69,10 @@ func WithOAuthTokenURL(tokenURL string) Option {
 	return func(c *config) { c.oauthTokenURL = tokenURL }
 }
 
-// WithHTTPClient makes the Client send through a copy of httpClient, which stays as it is, and
-// every attempt through its transport, if it has one. That transport keeps its own timeouts
-// instead of the 60 seconds an attempt otherwise gets to receive the answer's headers.
+// WithHTTPClient makes the Client send through a copy of httpClient, which stays as it is, every
+// attempt through its transport, if it has one, and every redirect New does not refuse through
+// its CheckRedirect. That transport keeps its own timeouts instead of the 60 seconds an attempt
+// otherwise gets to receive the answer's headers.
 func WithHTTPClient(httpClient *http.Client) Option {
 	return func(c *config) { c.httpClient = httpClient }
 }
@@ -101,8 +102,9 @@ func WithLogger(logger *slog.Logger) Option {
 }
 
 // New makes a Client that logs in with credential, or sends none when it is nil. A credential
-// with an empty part, or an option New cannot use, fails with ErrInvalidConfig, such as an http
-// endpoint on another machine, which would send the credential unencrypted.
+// with an empty part or a nil pointer, or an option New cannot use, fails with ErrInvalidConfig,
+// such as an http endpoint on another machine, which would send the credential unencrypted. The
+// Client refuses a redirect that would send a request's body to another scheme or host.
 func New(credential Credential, opts ...Option) (*Client, error) {
 	cfg := config{
 		endpoint:      defaultEndpoint,
@@ -129,6 +131,9 @@ func New(credential Credential, opts ...Option) (*Client, error) {
 		return nil, fmt.Errorf("%w: retries %d and retry wait %s cannot be negative", ErrInvalidConfig, cfg.maxRetries, cfg.retryWait)
 	}
 	if credential != nil {
+		if nilPointer(credential) {
+			return nil, fmt.Errorf("%w: the credential is a nil %T", ErrInvalidConfig, credential)
+		}
 		if err := credential.check(); err != nil {
 			return nil, err
 		}
@@ -136,6 +141,7 @@ func New(credential Credential, opts ...Option) (*Client, error) {
 
 	httpClient := *cfg.httpClient
 	httpClient.Transport = transports(credential, cfg, endpoint)
+	httpClient.CheckRedirect = redirectCheck(endpoint, cfg.httpClient.CheckRedirect)
 
 	client := &Client{
 		httpClient: &httpClient,
@@ -182,6 +188,29 @@ func transports(credential Credential, cfg config, endpoint *url.URL) http.Round
 	return newRetryTransport(login, cfg)
 }
 
+// maxRedirects is how many redirects a request follows when the caller's http.Client has no
+// CheckRedirect of its own, the same as Go's default.
+const maxRedirects = 10
+
+// redirectCheck returns the Client's CheckRedirect: it refuses a redirect that would send a
+// request's body, as a 307 or 308 does, to another scheme or host than endpoint's, and leaves any
+// other to callerCheck, or to Go's default of maxRedirects when that is nil.
+func redirectCheck(endpoint *url.URL, callerCheck func(*http.Request, []*http.Request) error) func(*http.Request, []*http.Request) error {
+	return func(req *http.Request, via []*http.Request) error {
+		if req.Body != nil && req.Body != http.NoBody && !onEndpoint(req.URL, endpoint) {
+			return fmt.Errorf("a %d would send the request's body to %s://%s, off the client's endpoint", req.Response.StatusCode, req.URL.Scheme, req.URL.Host)
+		}
+		if callerCheck != nil {
+			return callerCheck(req, via)
+		}
+		if len(via) >= maxRedirects {
+			return fmt.Errorf("stopped after %d redirects", maxRedirects)
+		}
+
+		return nil
+	}
+}
+
 // newRetryTransport returns the retries around next, with the retries and the wait cfg sets.
 func newRetryTransport(next http.RoundTripper, cfg config) *retryTransport {
 	return &retryTransport{
@@ -209,23 +238,40 @@ func defaultTransport() http.RoundTripper {
 
 // parseAddress returns address parsed when it is https, or http to this machine, without a user
 // or a query, and fails with ErrInvalidConfig otherwise: http elsewhere would carry the credential
-// unencrypted, and a user and password would show in every error that names the address.
+// unencrypted, and a user and password would show in every error that names the address. A
+// refusal names the address by its scheme, host and path only, or not at all when it does not
+// parse.
 func parseAddress(name, address string) (*url.URL, error) {
 	parsed, err := url.Parse(address)
 	if err != nil {
-		return nil, fmt.Errorf("%w: the %s %q is not an address: %w", ErrInvalidConfig, name, address, err)
+		return nil, fmt.Errorf("%w: the %s is not an address: %w", ErrInvalidConfig, name, withoutURL(err))
 	}
+
+	shown := schemeHostAndPath(parsed)
 	if parsed.User != nil {
-		return nil, fmt.Errorf("%w: the %s %q holds a user or password; give the credential to New instead", ErrInvalidConfig, name, parsed.Redacted())
+		return nil, fmt.Errorf("%w: the %s %q holds a user or password; give the credential to New instead", ErrInvalidConfig, name, shown)
 	}
 	if (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" || parsed.RawQuery != "" {
-		return nil, fmt.Errorf("%w: the %s %q is not an http or https address without a query", ErrInvalidConfig, name, address)
+		return nil, fmt.Errorf("%w: the %s %q is not an http or https address without a query", ErrInvalidConfig, name, shown)
 	}
 	if parsed.Scheme == "http" && !isLoopback(parsed.Hostname()) {
-		return nil, fmt.Errorf("%w: the %s %q would send the credential unencrypted; http is for this machine only", ErrInvalidConfig, name, address)
+		return nil, fmt.Errorf("%w: the %s %q would send the credential unencrypted; http is for this machine only", ErrInvalidConfig, name, shown)
 	}
 
 	return parsed, nil
+}
+
+// schemeHostAndPath returns address without a user, a password, a query or a fragment:
+// https://user:secret@example.com/a?token=x gives https://example.com/a.
+func schemeHostAndPath(address *url.URL) string {
+	shown := url.URL{
+		Scheme:  address.Scheme,
+		Host:    address.Host,
+		Path:    address.Path,
+		RawPath: address.RawPath,
+	}
+
+	return shown.String()
 }
 
 // isLoopback reports whether host is this machine: localhost or a loopback address.

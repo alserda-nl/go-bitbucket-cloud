@@ -167,9 +167,159 @@ func TestNew_SaysWhichPartOfACredentialIsEmpty(t *testing.T) {
 	}
 }
 
-func TestNew_RefusesAnAddressWithAPasswordWithoutShowingIt(t *testing.T) {
-	_, err := New(nil, WithEndpoint("https://user:secret@example.com"))
+func TestNew_NamesARefusedAddressWithoutItsUserPasswordOrQuery(t *testing.T) {
+	cases := []struct {
+		name     string
+		address  string
+		secret   string
+		expected string
+	}{
+		{
+			name:     "a user and a password",
+			address:  "https://user:s3cret@example.com",
+			secret:   "s3cret",
+			expected: `bitbucket: invalid client configuration: the endpoint "https://example.com" holds a user or password; give the credential to New instead`,
+		},
+		{
+			name:     "a user without a password",
+			address:  "https://someone@example.com/api",
+			secret:   "someone",
+			expected: `bitbucket: invalid client configuration: the endpoint "https://example.com/api" holds a user or password; give the credential to New instead`,
+		},
+		{
+			name:     "a password with a space, which does not parse",
+			address:  "https://user:pass word@example.com",
+			secret:   "pass word",
+			expected: "bitbucket: invalid client configuration: the endpoint is not an address: net/url: invalid userinfo",
+		},
+		{
+			name:     "a query with a token",
+			address:  "https://api.bitbucket.org?token=s3cret",
+			secret:   "s3cret",
+			expected: `bitbucket: invalid client configuration: the endpoint "https://api.bitbucket.org" is not an http or https address without a query`,
+		},
+	}
 
-	assert.ErrorIs(t, err, ErrInvalidConfig)
-	assert.NotContains(t, err.Error(), "secret", "the error should hide the address's password")
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, err := New(nil, WithEndpoint(testCase.address))
+
+			require.ErrorIs(t, err, ErrInvalidConfig, "New should refuse an endpoint with %s", testCase.name)
+			assert.NotContains(t, err.Error(), testCase.secret, "New's error should not show the endpoint's %s", testCase.name)
+			assert.EqualError(t, err, testCase.expected, "New should name the endpoint with %s by its scheme, host and path", testCase.name)
+		})
+	}
+}
+
+func TestNew_RefusesANilCredentialPointer(t *testing.T) {
+	cases := []struct {
+		name       string
+		credential Credential
+		expected   string
+	}{
+		{
+			name:       "a nil *APIToken",
+			credential: (*APIToken)(nil),
+			expected:   "bitbucket: invalid client configuration: the credential is a nil *client.APIToken",
+		},
+		{
+			name:       "a nil *OAuthConsumer",
+			credential: (*OAuthConsumer)(nil),
+			expected:   "bitbucket: invalid client configuration: the credential is a nil *client.OAuthConsumer",
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, err := New(testCase.credential)
+
+			assert.ErrorIs(t, err, ErrInvalidConfig, "New should refuse %s", testCase.name)
+			assert.EqualError(t, err, testCase.expected, "New should name %s", testCase.name)
+		})
+	}
+}
+
+func TestNew_RefusesARedirectThatWouldSendTheBodyElsewhere(t *testing.T) {
+	cases := []struct {
+		name     string
+		status   int
+		location string
+		expected string
+	}{
+		{
+			name:     "a 307 to another host",
+			status:   http.StatusTemporaryRedirect,
+			location: "https://elsewhere.example.com/upload?signature=secret",
+			expected: "bitbucket: PUT /2.0/thing: a 307 would send the request's body to https://elsewhere.example.com, off the client's endpoint",
+		},
+		{
+			name:     "a 308 to the endpoint's host over http",
+			status:   http.StatusPermanentRedirect,
+			location: "http://api.bitbucket.org/2.0/thing",
+			expected: "bitbucket: PUT /2.0/thing: a 308 would send the request's body to http://api.bitbucket.org, off the client's endpoint",
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			transport := &recordingTransport{responses: []*http.Response{
+				stubResponse(testCase.status, http.Header{"Location": {testCase.location}}, ""),
+				stubResponse(http.StatusOK, nil, "{}"),
+			}}
+			client := newTestClient(t, transport)
+
+			err := client.call(t.Context(), http.MethodPut, []string{"2.0", "thing"}, nil, map[string]string{"value": "secret"}, nil)
+
+			assert.EqualError(t, err, testCase.expected, "call should refuse %s", testCase.name)
+			assert.Len(t, transport.requests, 1, "call should not send the body on after %s", testCase.name)
+		})
+	}
+}
+
+func TestNew_FollowsARedirectThatKeepsTheBodyOnTheEndpoint(t *testing.T) {
+	transport := &recordingTransport{responses: []*http.Response{
+		stubResponse(http.StatusTemporaryRedirect, http.Header{"Location": {"https://api.bitbucket.org/2.0/moved"}}, ""),
+		stubResponse(http.StatusOK, nil, "{}"),
+	}}
+	client := newTestClient(t, transport)
+
+	err := client.call(t.Context(), http.MethodPut, []string{"2.0", "thing"}, nil, map[string]string{"value": "secret"}, nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{`{"value":"secret"}`, `{"value":"secret"}`}, transport.bodies)
+	assert.Equal(t, "/2.0/moved", transport.requests[1].URL.Path)
+}
+
+func TestNew_LeavesAnyOtherRedirectToTheCallersCheck(t *testing.T) {
+	transport := &recordingTransport{responses: []*http.Response{
+		stubResponse(http.StatusFound, http.Header{"Location": {"https://bbuseruploads.s3.amazonaws.com/log"}}, ""),
+	}}
+	checked := 0
+	given := &http.Client{
+		Transport: transport,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			checked++
+			return http.ErrUseLastResponse
+		},
+	}
+	client, err := New(nil, WithHTTPClient(given))
+	require.NoError(t, err)
+
+	err = client.call(t.Context(), http.MethodGet, []string{"2.0", "thing"}, nil, nil, nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, checked, "the caller's CheckRedirect should decide on a redirect without a body")
+	assert.Len(t, transport.requests, 1)
+}
+
+func TestNew_StopsAfterTenRedirectsWithoutACheckOfTheCallers(t *testing.T) {
+	transport := &recordingTransport{responses: []*http.Response{
+		stubResponse(http.StatusFound, http.Header{"Location": {"https://api.bitbucket.org/2.0/thing"}}, ""),
+	}}
+	client := newTestClient(t, transport)
+
+	err := client.call(t.Context(), http.MethodGet, []string{"2.0", "thing"}, nil, nil, nil)
+
+	assert.EqualError(t, err, "bitbucket: GET /2.0/thing: stopped after 10 redirects")
+	assert.Len(t, transport.requests, 10)
 }
