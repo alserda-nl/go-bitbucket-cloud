@@ -16,9 +16,9 @@
 // Where it knowingly differs from Bitbucket:
 //   - A timestamp ends in "Z" where Bitbucket writes "+00:00". A project without a description has
 //     "", where Bitbucket answers null for a description that was never set.
-//   - A refused credential answers 401 in the repository endpoints' error shape, which Bitbucket's
-//     own answer to one may not have. The token address answers a refused consumer as RFC 6749,
-//     section 5.2, describes.
+//   - A refused credential answers 401 in the repository endpoints' error shape,
+//     {"type": "error", "error": {"message": "..."}}, which Bitbucket's own answer to one may not
+//     have. The token address answers a refused consumer as RFC 6749, section 5.2, describes.
 //   - A list page has no "previous" link, which Bitbucket gives from the second page on, and an
 //     avatar link has no "?ts=" query.
 //   - A list or a project in a workspace that does not exist answers the workspace's 404, where

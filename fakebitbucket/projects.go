@@ -112,9 +112,10 @@ func (s *Server) SeedProject(project models.Project) models.Project {
 	return project
 }
 
-// HideProject makes the next reads of a stored project answer 404, as many as reads, as a new
-// project can for 38 seconds and more after its create: HideProject(project, 2) hides it from the
-// next two. It panics for a project SeedProject did not store.
+// HideProject makes the next reads of a stored project answer 404, as many as reads, and keeps it
+// out of the projects list until then without spending one, as Bitbucket can for a while after its
+// create: HideProject(project, 2) hides it from the next two reads. It panics for a project
+// SeedProject did not store.
 func (s *Server) HideProject(project models.Project, reads int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -145,7 +146,8 @@ func (s *Server) handleGetProject(w http.ResponseWriter, r *http.Request, worksp
 }
 
 // handleListProjects lists a workspace's projects newest first, as Bitbucket does, the one seeded
-// last counting as the newest; a request without a credential sees only the public ones.
+// last counting as the newest. It leaves out a hidden project, and a private one for a request
+// without a credential.
 func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request, workspace models.Workspace) {
 	newestFirst := func(a, b *storedProject) int {
 		return cmp.Compare(b.seeded, a.seeded)
@@ -153,9 +155,12 @@ func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request, work
 
 	var answers []any
 	for _, stored := range slices.SortedFunc(maps.Values(s.projects[workspace.UUID]), newestFirst) {
-		if visible(r, stored.project.IsPrivate) {
-			answers = append(answers, projectAnswer(stored.project, workspace))
+		// A hidden project keeps its reads: only a read of the project itself spends one.
+		if stored.hiddenReads > 0 || !visible(r, stored.project.IsPrivate) {
+			continue
 		}
+
+		answers = append(answers, projectAnswer(stored.project, workspace))
 	}
 
 	writePage(w, r, answers, projectsDefaultPage, projectsLargestPage)

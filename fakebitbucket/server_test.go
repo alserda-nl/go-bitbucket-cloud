@@ -19,7 +19,7 @@ import (
 	"github.com/alserda-nl/go-bitbucket-cloud/models"
 )
 
-// answer is what send and do return: the fake's answer to one request.
+// answer is what send, sendAnonymously and do return: the fake's answer to one request.
 type answer struct {
 	// status is the answer's HTTP status.
 	status int
@@ -33,15 +33,31 @@ type answer struct {
 func send(t *testing.T, fake *fakebitbucket.Server, method, path string, authorization ...string) answer {
 	t.Helper()
 
-	request, err := http.NewRequestWithContext(t.Context(), method, fmt.Sprintf("%s%s", fake.URL, path), nil)
-	require.NoError(t, err)
+	request := newRequest(t, fake, method, path)
 	if len(authorization) == 0 {
 		request.SetBasicAuth(fakebitbucket.Email, fakebitbucket.APIToken)
-	} else if authorization[0] != "" {
+	} else {
 		request.Header.Set("Authorization", authorization[0])
 	}
 
 	return do(t, request)
+}
+
+// sendAnonymously sends a request to the fake without a credential.
+func sendAnonymously(t *testing.T, fake *fakebitbucket.Server, method, path string) answer {
+	t.Helper()
+
+	return do(t, newRequest(t, fake, method, path))
+}
+
+// newRequest returns a request to path on the fake, without a body or a credential.
+func newRequest(t *testing.T, fake *fakebitbucket.Server, method, path string) *http.Request {
+	t.Helper()
+
+	request, err := http.NewRequestWithContext(t.Context(), method, fmt.Sprintf("%s%s", fake.URL, path), nil)
+	require.NoError(t, err)
+
+	return request
 }
 
 // do sends request to the fake and returns its status and its body, decoded when it is JSON.
@@ -136,6 +152,24 @@ func TestServer_PagesTheProjectsListAsBitbucketDoes(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, notANumber.status)
 }
 
+func TestServer_AnswersAPagePastTheLastWithAnEmptyPage(t *testing.T) {
+	fake := fakebitbucket.New(t)
+	workspace := seededWorkspace(fake, "acme")
+	for range 3 {
+		fake.SeedProject(fakebitbucket.NewProject(fakebitbucket.Project.WithWorkspace(workspace)))
+	}
+
+	afterTheLast := send(t, fake, http.MethodGet, "/2.0/workspaces/acme/projects?page=2")
+	// Its first item, at (page - 1) * 50, lies past the largest int.
+	huge := send(t, fake, http.MethodGet, "/2.0/workspaces/acme/projects?page=184467440737095518")
+
+	assert.Equal(t, []any{}, afterTheLast.body["values"], "page 2 of 3 projects in pages of 50")
+	assert.NotContains(t, afterTheLast.body, "next", "page 2 of 3 projects in pages of 50")
+
+	assert.Equal(t, http.StatusOK, huge.status, "page 184467440737095518")
+	assert.Equal(t, []any{}, huge.body["values"], "page 184467440737095518")
+}
+
 func TestServer_ListsTheNewestProjectFirst(t *testing.T) {
 	fake := fakebitbucket.New(t)
 	workspace := seededWorkspace(fake, "acme")
@@ -189,9 +223,9 @@ func TestServer_ShowsAnAnonymousReaderOnlyPublicProjects(t *testing.T) {
 		fakebitbucket.Project.WithPrivate(false),
 	))
 
-	listed := send(t, fake, http.MethodGet, "/2.0/workspaces/acme/projects", "")
-	private := send(t, fake, http.MethodGet, "/2.0/workspaces/acme/projects/PRIVATE", "")
-	public := send(t, fake, http.MethodGet, "/2.0/workspaces/acme/projects/PUBLIC", "")
+	listed := sendAnonymously(t, fake, http.MethodGet, "/2.0/workspaces/acme/projects")
+	private := sendAnonymously(t, fake, http.MethodGet, "/2.0/workspaces/acme/projects/PRIVATE")
+	public := sendAnonymously(t, fake, http.MethodGet, "/2.0/workspaces/acme/projects/PUBLIC")
 
 	assert.Equal(t, float64(1), listed.body["size"])
 	assert.Equal(t, http.StatusNotFound, private.status)
@@ -210,6 +244,21 @@ func TestServer_HidesAProjectForTheReadsAsked(t *testing.T) {
 
 	assert.Equal(t, []int{http.StatusNotFound, http.StatusNotFound, http.StatusOK}, []int{hidden.status, stillHidden.status, shown.status})
 	assert.Equal(t, recordedBody(t, "errors/project-not-found.json"), hidden.body, "a hidden project answers the recorded 404")
+}
+
+func TestServer_LeavesAHiddenProjectOutOfTheListWithoutSpendingARead(t *testing.T) {
+	fake := fakebitbucket.New(t)
+	workspace := seededWorkspace(fake, "acme")
+	project := fake.SeedProject(fakebitbucket.NewProject(fakebitbucket.Project.WithWorkspace(workspace), fakebitbucket.Project.WithKey("NEW")))
+	fake.HideProject(project, 1)
+
+	listedWhileHidden := send(t, fake, http.MethodGet, "/2.0/workspaces/acme/projects")
+	read := send(t, fake, http.MethodGet, "/2.0/workspaces/acme/projects/NEW")
+	listedAfterTheRead := send(t, fake, http.MethodGet, "/2.0/workspaces/acme/projects")
+
+	assert.Equal(t, float64(0), listedWhileHidden.body["size"], "the list should leave out a hidden project")
+	assert.Equal(t, http.StatusNotFound, read.status, "the list should leave the hidden project's read unspent")
+	assert.Equal(t, float64(1), listedAfterTheRead.body["size"], "the list should show the project once its reads are spent")
 }
 
 func TestServer_HideProjectRefusesAProjectItDoesNotHave(t *testing.T) {
@@ -234,7 +283,7 @@ func TestServer_SeedProjectRefusesAProjectWhoseWorkspaceItDoesNotHave(t *testing
 
 // TestServer_AnswersEveryFieldOfTheRecordedAnswers compares each answer's fields and their JSON
 // types with the sample it starts from, one of Bitbucket's own answers, so a field the fake drops,
-// adds or retypes fails here; null matches any type.
+// adds or retypes fails here; only a null in the sample matches any type.
 func TestServer_AnswersEveryFieldOfTheRecordedAnswers(t *testing.T) {
 	fake := fakebitbucket.New(t)
 	workspace := seededWorkspace(fake, "acme")
@@ -329,7 +378,7 @@ func TestServer_FailsTheNextRequestsAndRecordsEveryRequest(t *testing.T) {
 	statuses := []int{
 		send(t, fake, http.MethodGet, "/2.0/workspaces/acme").status,
 		send(t, fake, http.MethodGet, "/2.0/workspaces/acme", "Bearer not-issued").status,
-		send(t, fake, http.MethodGet, "/2.0/workspaces/acme?pagelen=5", "").status,
+		sendAnonymously(t, fake, http.MethodGet, "/2.0/workspaces/acme?pagelen=5").status,
 	}
 
 	assert.Equal(t, []int{http.StatusServiceUnavailable, http.StatusServiceUnavailable, http.StatusOK}, statuses)
@@ -356,6 +405,21 @@ func TestServer_FailsTheNextRequestsAndRecordsEveryRequest(t *testing.T) {
 			Route:      "GET /2.0/workspaces/{workspace}",
 		},
 	}, fake.Requests())
+}
+
+func TestServer_AnswersTheFailuresInTheOrderAsked(t *testing.T) {
+	fake := fakebitbucket.New(t)
+	seededWorkspace(fake, "acme")
+	fake.FailNext(http.StatusTooManyRequests, 1)
+	fake.FailNext(http.StatusServiceUnavailable, 1)
+
+	statuses := []int{
+		send(t, fake, http.MethodGet, "/2.0/workspaces/acme").status,
+		send(t, fake, http.MethodGet, "/2.0/workspaces/acme").status,
+		send(t, fake, http.MethodGet, "/2.0/workspaces/acme").status,
+	}
+
+	assert.Equal(t, []int{http.StatusTooManyRequests, http.StatusServiceUnavailable, http.StatusOK}, statuses, "FailNext(429, 1), then FailNext(503, 1)")
 }
 
 func TestServer_AnswersAPathWithoutARouteWith501(t *testing.T) {
@@ -401,14 +465,16 @@ func readSample(t *testing.T, name string) []byte {
 }
 
 // differentFields lists every field that expected or actual has and the other lacks, and every
-// field the two hold as different JSON types; null matches any type.
+// field the two hold as different JSON types; only a null in expected, the sample, matches any.
 func differentFields(path string, expected, actual any) []string {
 	expectedObject, expectedIsObject := expected.(map[string]any)
 	actualObject, actualIsObject := actual.(map[string]any)
 
 	switch {
-	case expected == nil || actual == nil:
+	case expected == nil:
 		return nil
+	case actual == nil:
+		return []string{fmt.Sprintf("%s: want %T, got null", path, expected)}
 	case expectedIsObject && actualIsObject:
 		var different []string
 		for _, key := range slices.Sorted(maps.Keys(expectedObject)) {

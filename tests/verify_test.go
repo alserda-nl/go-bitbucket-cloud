@@ -3,7 +3,7 @@ package e2e
 import "testing"
 
 func TestVerify_ANewProjectReadsBackOnceBitbucketShowsIt(t *testing.T) {
-	// A new project can answer 404 for 38 seconds and more after its create.
+	// A new project can answer 404 for a while after its create.
 	given, when, then := newVerifyStage(t)
 
 	given.a_new_project_that_answers_404_for_n_reads("NEW", 2)

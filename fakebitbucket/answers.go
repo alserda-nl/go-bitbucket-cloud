@@ -48,7 +48,7 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	_ = json.NewEncoder(w).Encode(value)
 }
 
-// errorAnswer is the repository endpoints' error answer: {"type": "error", "error": {"message": ...}}.
+// errorAnswer is the repository endpoints' error answer: {"type": "error", "error": {"message": "..."}}.
 type errorAnswer struct {
 	// Type is "error".
 	Type string `json:"type"`
@@ -69,8 +69,8 @@ func writeError(w http.ResponseWriter, status int, message string) {
 
 // writePage answers the page of items a request's page and pagelen ask for, defaultPageSize items
 // a page when it asks none, as Bitbucket's repository endpoints do: ?pagelen=2&page=2 of 5 items
-// answers the third and fourth, with "size": 5 and a next link to page 3. A page size outside 1
-// to largestPage answers 400 "Invalid pagelen", as Bitbucket answers 101 and 1000.
+// answers the third and fourth, with "size": 5 and a next link to page 3. A page size outside 1 to
+// largestPage answers 400 "Invalid pagelen", as Bitbucket refuses a page size above the list's largest.
 func writePage(w http.ResponseWriter, r *http.Request, items []any, defaultPageSize, largestPage int) {
 	query := r.URL.Query()
 	pageSize := defaultPageSize
@@ -87,7 +87,12 @@ func writePage(w http.ResponseWriter, r *http.Request, items []any, defaultPageS
 	pageNumber, _ := strconv.Atoi(query.Get("page"))
 	pageNumber = max(pageNumber, 1)
 
-	start := min((pageNumber-1)*pageSize, len(items))
+	// A page past the last is empty. The page number is compared before it is multiplied, so a huge
+	// one cannot overflow into a negative start.
+	start := len(items)
+	if pageNumber-1 <= len(items)/pageSize {
+		start = (pageNumber - 1) * pageSize
+	}
 	end := min(start+pageSize, len(items))
 	answer := map[string]any{
 		"page":    pageNumber,

@@ -88,7 +88,7 @@ func New(t testing.TB) *Server {
 
 	server := &Server{
 		workspaces: map[string]models.Workspace{},
-		projects:   map[string]map[string]*storedProject{},
+		projects:   map[models.UUID]map[string]*storedProject{},
 		tokens:     map[string]bool{},
 	}
 
@@ -104,8 +104,8 @@ func New(t testing.TB) *Server {
 	return server
 }
 
-// routes returns every route the fake serves, by its pattern; TestAnswers sends each one a
-// request, so no route escapes the comparison of the fake's answers with Bitbucket's.
+// routes returns every route the fake serves, by its pattern. TestAnswers sends each one a request,
+// so no route escapes the check TestAnswers' doc describes.
 func (s *Server) routes() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
 		fmt.Sprintf("POST %s", TokenPath):                        s.handleToken,
@@ -138,8 +138,9 @@ func (s *Server) intercept(routes *http.ServeMux) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		credential := credentialOf(r)
 		_, route := routes.Handler(r)
-		status, failing := s.record(r, credential, route)
-		if failing {
+		s.record(r, credential, route)
+
+		if status, failing := s.nextFailure(); failing {
 			writeError(w, status, "induced failure")
 			return
 		}
@@ -154,8 +155,8 @@ func (s *Server) intercept(routes *http.ServeMux) http.Handler {
 	})
 }
 
-// record keeps a request for Requests and returns the status FailNext asked for it, if any.
-func (s *Server) record(r *http.Request, credential, route string) (int, bool) {
+// record keeps a request for Requests.
+func (s *Server) record(r *http.Request, credential, route string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -166,6 +167,13 @@ func (s *Server) record(r *http.Request, credential, route string) (int, bool) {
 		Credential: credential,
 		Route:      route,
 	})
+}
+
+// nextFailure takes the next status FailNext asked for, in the order they were asked, and reports
+// false when none is left.
+func (s *Server) nextFailure() (int, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if len(s.failures) == 0 {
 		return 0, false

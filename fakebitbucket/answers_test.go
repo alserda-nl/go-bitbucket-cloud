@@ -14,9 +14,10 @@ import (
 )
 
 // TestAnswers sends a request to every API route the fake serves and, when FAKEBITBUCKET_ANSWERS
-// names a file, writes the answers there as a list of operation, status and body, which the
-// maintainers compare with Bitbucket's own answers by this test's name: the name, the variable and
-// the three keys stay as they are.
+// names a file, writes the answers there as a list of operation, status and body. A check the
+// maintainers run outside this repository calls go test -run '^TestAnswers$' ./fakebitbucket/ with
+// FAKEBITBUCKET_ANSWERS set and compares each answer's shape with Bitbucket's answer to the same
+// route and status, so the test's name, the variable and the three keys stay as they are.
 func TestAnswers(t *testing.T) {
 	fake := fakebitbucket.New(t)
 	workspace := seededWorkspace(fake, "acme")
