@@ -4,38 +4,25 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/alserda-nl/go-bitbucket-cloud/client"
 	"github.com/alserda-nl/go-bitbucket-cloud/fakebitbucket"
 	"github.com/alserda-nl/go-bitbucket-cloud/models"
 )
 
 type listStage struct {
-	t       *testing.T
-	assert  *assert.Assertions
-	require *require.Assertions
+	stage
 
-	fake      *fakebitbucket.Server
-	workspace models.Workspace
-	options   []client.ListOption
+	options []client.ListOption
 
 	projects []models.Project
 	err      error
 }
 
 func newListStage(t *testing.T) (*listStage, *listStage, *listStage) {
-	fake := fakebitbucket.New(t)
-	stage := &listStage{
-		t:         t,
-		assert:    assert.New(t),
-		require:   require.New(t),
-		fake:      fake,
-		workspace: seedWorkspace(fake, "acme"),
-	}
+	s := &listStage{stage: newStage(t)}
+	s.workspace = seedWorkspace(s.fake, "acme")
 
-	return stage, stage, stage
+	return s, s, s
 }
 
 func (s *listStage) and() *listStage { return s }
@@ -53,7 +40,7 @@ func (s *listStage) the_list_options_are(options ...client.ListOption) *listStag
 	return s
 }
 
-func (s *listStage) the_projects_of_are_listed(workspace string) *listStage {
+func (s *listStage) the_projects_are_listed_in(workspace string) *listStage {
 	s.projects, s.err = newClient(s.t, s.fake, apiToken()).Workspaces.ListProjects(s.t.Context(), workspace, s.options...)
 	return s
 }

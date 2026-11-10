@@ -11,7 +11,7 @@ func TestListProjects_FetchesEveryPageOfTheLargestSize(t *testing.T) {
 
 	given.n_projects_in_the_workspace(250)
 
-	when.the_projects_of_are_listed("acme")
+	when.the_projects_are_listed_in("acme")
 
 	then.n_projects_are_returned(250).
 		and().the_pages_asked_for_were("100", "100", "100")
@@ -23,7 +23,7 @@ func TestListProjects_ALimitAsksForOneSmallPage(t *testing.T) {
 	given.n_projects_in_the_workspace(250).
 		and().the_list_options_are(client.WithLimit(5))
 
-	when.the_projects_of_are_listed("acme")
+	when.the_projects_are_listed_in("acme")
 
 	then.n_projects_are_returned(5).
 		and().the_pages_asked_for_were("5")
@@ -35,7 +35,7 @@ func TestListProjects_ASmallerPageSizeAsksForMorePages(t *testing.T) {
 	given.n_projects_in_the_workspace(25).
 		and().the_list_options_are(client.WithPageSize(10))
 
-	when.the_projects_of_are_listed("acme")
+	when.the_projects_are_listed_in("acme")
 
 	then.n_projects_are_returned(25).
 		and().the_pages_asked_for_were("10", "10", "10")
@@ -47,7 +47,7 @@ func TestListProjects_APageSizeAboveTheLargestIsRefused(t *testing.T) {
 
 	given.the_list_options_are(client.WithPageSize(101))
 
-	when.the_projects_of_are_listed("acme")
+	when.the_projects_are_listed_in("acme")
 
 	then.the_option_is_refused_before_any_request()
 }
@@ -55,7 +55,7 @@ func TestListProjects_APageSizeAboveTheLargestIsRefused(t *testing.T) {
 func TestListProjects_AnUnknownWorkspaceIsNotFound(t *testing.T) {
 	_, when, then := newListStage(t)
 
-	when.the_projects_of_are_listed("nobody")
+	when.the_projects_are_listed_in("nobody")
 
 	then.the_workspace_is_not_found()
 }

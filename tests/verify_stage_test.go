@@ -5,38 +5,25 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/alserda-nl/go-bitbucket-cloud/client"
-	"github.com/alserda-nl/go-bitbucket-cloud/fakebitbucket"
-	"github.com/alserda-nl/go-bitbucket-cloud/models"
 )
 
 type verifyStage struct {
-	t       *testing.T
-	assert  *assert.Assertions
-	require *require.Assertions
+	stage
 
-	fake      *fakebitbucket.Server
-	workspace models.Workspace
-	options   []client.VerifyOption
+	options []client.VerifyOption
 
 	err error
 }
 
 func newVerifyStage(t *testing.T) (*verifyStage, *verifyStage, *verifyStage) {
-	fake := fakebitbucket.New(t)
-	stage := &verifyStage{
-		t:         t,
-		assert:    assert.New(t),
-		require:   require.New(t),
-		fake:      fake,
-		workspace: seedWorkspace(fake, "acme"),
-		options:   []client.VerifyOption{client.WithInterval(time.Millisecond)},
+	s := &verifyStage{
+		stage:   newStage(t),
+		options: []client.VerifyOption{client.WithInterval(time.Millisecond)},
 	}
+	s.workspace = seedWorkspace(s.fake, "acme")
 
-	return stage, stage, stage
+	return s, s, s
 }
 
 func (s *verifyStage) and() *verifyStage { return s }
@@ -77,7 +64,7 @@ func (s *verifyStage) the_project_is_not_verified() *verifyStage {
 	return s
 }
 
-func (s *verifyStage) the_project_was_read_n_times(key string, count int) *verifyStage {
-	s.assert.Len(requestsTo(s.fake, projectPath(s.workspace, key)), count)
+func (s *verifyStage) the_project_was_requested_n_times(key string, count int) *verifyStage {
+	s.checkRequestCount(projectPath(s.workspace, key), count)
 	return s
 }

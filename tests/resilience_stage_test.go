@@ -1,28 +1,18 @@
 package e2e
 
 import (
-	"bytes"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/alserda-nl/go-bitbucket-cloud/client"
-	"github.com/alserda-nl/go-bitbucket-cloud/fakebitbucket"
 	"github.com/alserda-nl/go-bitbucket-cloud/models"
 )
 
 // resilienceStage sets the client's retries and logging in GIVEN steps and builds the client in the
 // WHEN step, so each scenario drives its own configuration against a fake primed with FailNext.
 type resilienceStage struct {
-	t       *testing.T
-	assert  *assert.Assertions
-	require *require.Assertions
+	stage
 
-	fake      *fakebitbucket.Server
-	workspace models.Workspace
-	options   []client.Option
-	log       bytes.Buffer
+	options []client.Option
 
 	// readKey is the key of the project the WHEN step read.
 	readKey string
@@ -31,16 +21,10 @@ type resilienceStage struct {
 }
 
 func newResilienceStage(t *testing.T) (*resilienceStage, *resilienceStage, *resilienceStage) {
-	fake := fakebitbucket.New(t)
-	stage := &resilienceStage{
-		t:         t,
-		assert:    assert.New(t),
-		require:   require.New(t),
-		fake:      fake,
-		workspace: seedWorkspace(fake, "acme"),
-	}
+	s := &resilienceStage{stage: newStage(t)}
+	s.workspace = seedWorkspace(s.fake, "acme")
 
-	return stage, stage, stage
+	return s, s, s
 }
 
 func (s *resilienceStage) and() *resilienceStage { return s }
@@ -55,14 +39,13 @@ func (s *resilienceStage) the_client_tries_again_at_most(maxRetries int) *resili
 	return s
 }
 
-func (s *resilienceStage) bitbucket_answers_the_next_n_requests_with(times, status int) *resilienceStage {
+func (s *resilienceStage) bitbucket_answers_with_status_n_times(status, times int) *resilienceStage {
 	s.fake.FailNext(status, times)
 	return s
 }
 
 func (s *resilienceStage) the_project_is_read(key string) *resilienceStage {
-	logger := debugLogger(&s.log)
-	apiClient := newClient(s.t, s.fake, apiToken(), append(s.options, client.WithLogger(logger))...)
+	apiClient := newClient(s.t, s.fake, apiToken(), append(s.options, client.WithLogger(s.logger()))...)
 
 	s.readKey = key
 	s.project, s.err = apiClient.Projects.Get(s.t.Context(), s.workspace.Slug, key)
@@ -83,16 +66,11 @@ func (s *resilienceStage) bitbucket_answer_is_returned(status int) *resilienceSt
 }
 
 func (s *resilienceStage) the_project_was_requested_n_times(count int) *resilienceStage {
-	s.assert.Len(requestsTo(s.fake, projectPath(s.workspace, s.readKey)), count)
+	s.checkRequestCount(projectPath(s.workspace, s.readKey), count)
 	return s
 }
 
 func (s *resilienceStage) the_log_has_a_line_per_attempt(lines ...string) *resilienceStage {
-	logged := logLines(&s.log)
-	s.require.Len(logged, len(lines))
-	for i, line := range lines {
-		s.assert.Contains(logged[i], line)
-	}
-
+	s.checkALinePerAttempt(lines)
 	return s
 }

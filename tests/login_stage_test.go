@@ -1,15 +1,11 @@
 package e2e
 
 import (
-	"bytes"
 	"fmt"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/alserda-nl/go-bitbucket-cloud/client"
 	"github.com/alserda-nl/go-bitbucket-cloud/fakebitbucket"
@@ -17,34 +13,23 @@ import (
 )
 
 type loginStage struct {
-	t       *testing.T
-	assert  *assert.Assertions
-	require *require.Assertions
+	stage
 
-	fake      *fakebitbucket.Server
-	workspace models.Workspace
 	apiClient *client.Client
 
 	// readKey is the key of the project the WHEN step read.
 	readKey     string
 	project     *models.Project
 	projects    []models.Project
-	log         bytes.Buffer
 	err         error
 	failedReads atomic.Int32
 }
 
 func newLoginStage(t *testing.T) (*loginStage, *loginStage, *loginStage) {
-	fake := fakebitbucket.New(t)
-	stage := &loginStage{
-		t:         t,
-		assert:    assert.New(t),
-		require:   require.New(t),
-		fake:      fake,
-		workspace: seedWorkspace(fake, "acme"),
-	}
+	s := &loginStage{stage: newStage(t)}
+	s.workspace = seedWorkspace(s.fake, "acme")
 
-	return stage, stage, stage
+	return s, s, s
 }
 
 func (s *loginStage) and() *loginStage { return s }
@@ -65,8 +50,7 @@ func (s *loginStage) the_client_logs_in_with(credential client.Credential) *logi
 }
 
 func (s *loginStage) the_client_logs_in_with_a_log(credential client.Credential) *loginStage {
-	logger := debugLogger(&s.log)
-	s.apiClient = newClient(s.t, s.fake, credential, client.WithLogger(logger))
+	s.apiClient = newClient(s.t, s.fake, credential, client.WithLogger(s.logger()))
 	return s
 }
 
@@ -170,16 +154,11 @@ func (s *loginStage) every_api_request_carried(credential string) *loginStage {
 }
 
 func (s *loginStage) the_log_has_a_line_per_attempt(lines ...string) *loginStage {
-	logged := logLines(&s.log)
-	s.require.Len(logged, len(lines))
-	for i, line := range lines {
-		s.assert.Contains(logged[i], line)
-	}
-
+	s.checkALinePerAttempt(lines)
 	return s
 }
 
 func (s *loginStage) the_token_address_was_asked_n_times(times int) *loginStage {
-	s.assert.Len(requestsTo(s.fake, fakebitbucket.TokenPath), times)
+	s.checkRequestCount(fakebitbucket.TokenPath, times)
 	return s
 }

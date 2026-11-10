@@ -11,7 +11,7 @@ func TestVerify_ANewProjectReadsBackOnceBitbucketShowsIt(t *testing.T) {
 	when.the_project_is_verified("NEW")
 
 	then.the_project_read_back().
-		and().the_project_was_read_n_times("NEW", 3)
+		and().the_project_was_requested_n_times("NEW", 3)
 }
 
 func TestVerify_AProjectThatNeverShowsIsNotVerified(t *testing.T) {
@@ -23,5 +23,5 @@ func TestVerify_AProjectThatNeverShowsIsNotVerified(t *testing.T) {
 	when.the_project_is_verified("NEW")
 
 	then.the_project_is_not_verified().
-		and().the_project_was_read_n_times("NEW", 3)
+		and().the_project_was_requested_n_times("NEW", 3)
 }

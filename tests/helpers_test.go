@@ -1,14 +1,14 @@
 // Package e2e drives the client against the in-process fake over real HTTP, through the public
 // API of client, models and fakebitbucket only. These tests carry no build tag and run in every
 // make test.
+//
+// A scenario calls snake_case steps on its given, when and then stages, chained with and(), the
+// first step on its stage's line and _n_ in a step that takes a count; verify_test.go is the shortest.
 package e2e
 
 import (
-	"bytes"
 	"fmt"
-	"log/slog"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -79,14 +79,4 @@ func requestsTo(fake *fakebitbucket.Server, path string) []fakebitbucket.Request
 // projectPath returns the API path of the project with key in workspace.
 func projectPath(workspace models.Workspace, key string) string {
 	return fmt.Sprintf("/2.0/workspaces/%s/projects/%s", workspace.Slug, key)
-}
-
-// debugLogger returns a logger that writes every line, the debug ones included, to output.
-func debugLogger(output *bytes.Buffer) *slog.Logger {
-	return slog.New(slog.NewTextHandler(output, &slog.HandlerOptions{Level: slog.LevelDebug}))
-}
-
-// logLines returns the lines written to log.
-func logLines(log *bytes.Buffer) []string {
-	return strings.Split(strings.TrimSpace(log.String()), "\n")
 }

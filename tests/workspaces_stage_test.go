@@ -3,37 +3,26 @@ package e2e
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/alserda-nl/go-bitbucket-cloud/client"
-	"github.com/alserda-nl/go-bitbucket-cloud/fakebitbucket"
 	"github.com/alserda-nl/go-bitbucket-cloud/models"
 )
 
 type workspaceStage struct {
-	t       *testing.T
-	assert  *assert.Assertions
-	require *require.Assertions
+	stage
 
-	fake      *fakebitbucket.Server
-	workspace models.Workspace
-	login     client.Credential
+	login client.Credential
 
 	read *models.Workspace
 	err  error
 }
 
 func newWorkspaceStage(t *testing.T) (*workspaceStage, *workspaceStage, *workspaceStage) {
-	stage := &workspaceStage{
-		t:       t,
-		assert:  assert.New(t),
-		require: require.New(t),
-		fake:    fakebitbucket.New(t),
-		login:   apiToken(),
+	s := &workspaceStage{
+		stage: newStage(t),
+		login: apiToken(),
 	}
 
-	return stage, stage, stage
+	return s, s, s
 }
 
 func (s *workspaceStage) and() *workspaceStage { return s }
