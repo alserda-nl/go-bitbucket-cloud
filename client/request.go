@@ -64,7 +64,8 @@ func (c *Client) call(ctx context.Context, method string, segments []string, que
 }
 
 // send sends one request with body as JSON, when there is one, and decodes the answer into out,
-// when out is not nil. An answer of 400 or above becomes an *APIError.
+// when out is not nil. An answer of 400 or above becomes an *APIError, and one longer than
+// answerLimit fails.
 func (c *Client) send(ctx context.Context, method string, address *url.URL, body, out any) error {
 	path := address.EscapedPath()
 
@@ -95,7 +96,7 @@ func (c *Client) send(ctx context.Context, method string, address *url.URL, body
 	}
 	defer func() { _ = response.Body.Close() }()
 
-	answer, err := io.ReadAll(response.Body)
+	answer, err := readAnswer(response.Body)
 	if err != nil {
 		return fmt.Errorf("bitbucket: %s %s: reading %s: %w", method, path, describeAnswer(response), err)
 	}
@@ -113,6 +114,23 @@ func (c *Client) send(ctx context.Context, method string, address *url.URL, body
 	}
 
 	return nil
+}
+
+// answerLimit is the most of an answer send and the token request read, so an answer that does
+// not end cannot fill the memory.
+const answerLimit = 32 << 20
+
+// readAnswer reads body whole, up to answerLimit, and fails for a longer one.
+func readAnswer(body io.Reader) ([]byte, error) {
+	answer, err := io.ReadAll(io.LimitReader(body, answerLimit+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(answer) > answerLimit {
+		return nil, fmt.Errorf("it is longer than %d MiB, the most the client reads", answerLimit>>20)
+	}
+
+	return answer, nil
 }
 
 // describeAnswer names an answer by its status and its content type, if any, never by its body:

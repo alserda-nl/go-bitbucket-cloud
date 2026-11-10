@@ -67,8 +67,9 @@ type APIError struct {
 	Text string
 }
 
-// Error describes the call and Bitbucket's answer in one line, with the scopes a 403 says the
-// credential misses, a 500's error ID and the attempts when there was more than one:
+// Error describes the call and Bitbucket's answer in one line: the status, Bitbucket's words
+// unless they only repeat it, the fields, key and arguments, the scopes a 403 says the credential
+// misses, a 500's error ID and the attempts when there was more than one:
 // "bitbucket: GET /2.0/workspaces/acme: 503 Service Unavailable (after 4 attempts)".
 func (e *APIError) Error() string {
 	return fmt.Sprintf("bitbucket: %s", e.describe())
@@ -76,8 +77,16 @@ func (e *APIError) Error() string {
 
 // describe says what Error says, without the "bitbucket:" that starts every error of this package.
 func (e *APIError) describe() string {
-	parts := []string{fmt.Sprintf("%s %s: %d %s", e.Method, e.Path, e.StatusCode, http.StatusText(e.StatusCode))}
-	for _, part := range []string{e.Message, e.Detail, shorten(e.Text)} {
+	status := http.StatusText(e.StatusCode)
+
+	// A message that only repeats the status, such as "Conflict" for a 409, adds nothing.
+	message := e.Message
+	if strings.EqualFold(message, status) {
+		message = ""
+	}
+
+	parts := []string{fmt.Sprintf("%s %s: %d %s", e.Method, e.Path, e.StatusCode, status)}
+	for _, part := range []string{message, e.Detail, shorten(e.Text)} {
 		if part != "" {
 			parts = append(parts, part)
 		}
@@ -89,6 +98,9 @@ func (e *APIError) describe() string {
 	}
 	if e.Key != "" {
 		text = fmt.Sprintf("%s (%s)", text, e.Key)
+	}
+	if len(e.Arguments) > 0 {
+		text = fmt.Sprintf("%s (%s)", text, describeArguments(e.Arguments))
 	}
 	if missing := e.MissingScopes(); len(missing) > 0 {
 		text = fmt.Sprintf("%s (the credential misses the scopes %s)", text, strings.Join(missing, ", "))
@@ -130,7 +142,8 @@ func (e *APIError) MissingScopes() []string {
 //   - {"key", "message", "arguments"}: deployments, deployment environments and runners;
 //   - {"code", "message"}: a Pipelines 500, whose code repeats its status;
 //   - {"message", "status"}: a removed 1.0 path's 410;
-//   - {"error", "error_description"}: the token address, as RFC 6749, section 5.2, has it.
+//   - {"error", "error_description"}: the token address, in RFC 6749's shape (section 5.2), not
+//     one from Bitbucket's answers.
 //
 // An answer in text, such as a text/html 402, or without a body keeps its text instead.
 type errorAnswer struct {
@@ -252,6 +265,17 @@ func describeFields(fields map[string][]string) string {
 	return strings.Join(described, "; ")
 }
 
+// describeArguments lists an error's arguments in a stable order, as describeFields does:
+// "environment.environment_type: Property environment_type is required".
+func describeArguments(arguments map[string]any) string {
+	described := make([]string, 0, len(arguments))
+	for _, name := range slices.Sorted(maps.Keys(arguments)) {
+		described = append(described, fmt.Sprintf("%s: %v", name, arguments[name]))
+	}
+
+	return strings.Join(described, "; ")
+}
+
 // shorten cuts text longer than textShown characters to that many, followed by "...".
 func shorten(text string) string {
 	runes := []rune(text)
@@ -263,10 +287,15 @@ func shorten(text string) string {
 }
 
 // withoutURL drops the address of every *url.Error in err: its query can carry a signed token, as
-// a pipeline cache's download address does.
+// a pipeline cache's download address does. A *url.Error without an error of its own leaves its
+// operation only: "Get failed".
 func withoutURL(err error) error {
 	var urlErr *url.Error
-	for errors.As(err, &urlErr) && urlErr.Err != nil {
+	for errors.As(err, &urlErr) {
+		if urlErr.Err == nil {
+			return fmt.Errorf("%s failed", urlErr.Op)
+		}
+
 		err = urlErr.Err
 	}
 

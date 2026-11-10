@@ -3,6 +3,7 @@ package client
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"testing"
@@ -92,6 +93,14 @@ func TestSend_Fails(t *testing.T) {
 			transport: &recordingTransport{responses: []*http.Response{stubResponse(http.StatusOK, http.Header{"Content-Type": {"text/html"}}, "<html>")}},
 			expected:  "bitbucket: GET /2.0/thing: decoding the 200 answer (text/html): invalid character '<' looking for beginning of value",
 		},
+		{
+			name:   "an answer longer than 32 MiB",
+			method: http.MethodGet,
+			transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return longResponse(answerLimit + 1), nil
+			}),
+			expected: "bitbucket: GET /2.0/thing: reading the 200 answer: it is longer than 32 MiB, the most the client reads",
+		},
 	}
 
 	for _, testCase := range cases {
@@ -103,6 +112,34 @@ func TestSend_Fails(t *testing.T) {
 
 			assert.EqualError(t, err, testCase.expected, "call failed with the wrong error for %s", testCase.name)
 		})
+	}
+}
+
+func TestSend_ReadsAnAnswerOfExactly32MiB(t *testing.T) {
+	client := newTestClient(t, roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return longResponse(answerLimit), nil
+	}))
+
+	err := client.call(t.Context(), http.MethodGet, []string{"2.0", "thing"}, nil, nil, nil)
+
+	assert.NoError(t, err)
+}
+
+// zeros is an endless answer body of zero bytes, made as they are read rather than held.
+type zeros struct{}
+
+func (zeros) Read(p []byte) (int, error) {
+	clear(p)
+
+	return len(p), nil
+}
+
+// longResponse is a 200 whose body holds size zero bytes.
+func longResponse(size int64) *http.Response {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{},
+		Body:       io.NopCloser(io.LimitReader(zeros{}, size)),
 	}
 }
 

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -168,7 +167,7 @@ func (s *tokenSource) fetch(ctx context.Context) (string, error) {
 	}
 	defer func() { _ = response.Body.Close() }()
 
-	body, err := io.ReadAll(response.Body)
+	body, err := readAnswer(response.Body)
 	if err != nil {
 		return "", &loginError{err: fmt.Errorf("reading the access token from %s: %w", s.tokenURL, err)}
 	}

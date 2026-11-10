@@ -154,6 +154,15 @@ func TestTokenSource_Fails(t *testing.T) {
 			expectedStatus: 0,
 		},
 		{
+			name:     "an answer longer than 32 MiB",
+			tokenURL: tokenAddress,
+			transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return longResponse(answerLimit + 1), nil
+			}),
+			expected:       "logging in with the OAuth consumer failed: reading the access token from https://bitbucket.org/site/oauth2/access_token: it is longer than 32 MiB, the most the client reads",
+			expectedStatus: 0,
+		},
+		{
 			name:     "a refused consumer",
 			tokenURL: tokenAddress,
 			transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {

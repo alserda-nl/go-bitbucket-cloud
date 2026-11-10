@@ -141,6 +141,35 @@ func TestNewAPIError_ReadsARemoved10PathsAnswer(t *testing.T) {
 	assert.Equal(t, "bitbucket: GET /1.0/privileges/a/b: 410 Gone: This API is no longer supported.", actual.Error())
 }
 
+func TestNewAPIError_NamesTheArgumentsOfAValidationError(t *testing.T) {
+	// Written by hand in the shapes Bitbucket answers a deployment environment and a deployment
+	// variable it refuses with.
+	cases := []struct {
+		name     string
+		body     string
+		expected string
+	}{
+		{
+			name:     "a deployment environment without its type",
+			body:     `{"arguments": {"environment.environment_type": "Property environment_type is required"}, "key": "deploy-service.request.validation-error", "message": "The request body contains invalid properties"}`,
+			expected: "bitbucket: POST /2.0/a/path: 400 Bad Request: The request body contains invalid properties (deploy-service.request.validation-error) (environment.environment_type: Property environment_type is required)",
+		},
+		{
+			name:     "a deployment variable without its key",
+			body:     `{"error": {"data": {"arguments": {"key-invalid": "Variable key should contain only alphanumeric characters and underscores and should not begin with a number.", "key-required": "Property key is required"}, "key": "variable-service.request.validation-error"}, "detail": "The request body contains invalid properties", "message": "Bad request"}}`,
+			expected: "bitbucket: POST /2.0/a/path: 400 Bad Request: The request body contains invalid properties (variable-service.request.validation-error) (key-invalid: Variable key should contain only alphanumeric characters and underscores and should not begin with a number.; key-required: Property key is required)",
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			actual := newAPIError(http.MethodPost, "/2.0/a/path", http.StatusBadRequest, "application/json", []byte(testCase.body)).Error()
+
+			assert.Equal(t, testCase.expected, actual, "newAPIError(%s).Error() should name its arguments", testCase.name)
+		})
+	}
+}
+
 func TestNewAPIError_ReadsAnOAuthRefusal(t *testing.T) {
 	body := []byte(`{"error": "invalid_client", "error_description": "Invalid OAuth client credentials"}`)
 
@@ -192,7 +221,7 @@ func TestAPIError_ErrorSaysTheCallTheStatusAndBitbucketsWords(t *testing.T) {
 			expected: "bitbucket: GET /2.0/workspaces/acme/projects/ABC: 403 Forbidden: Your credentials lack one or more required privilege scopes. (the credential misses the scopes read:project:bitbucket)",
 		},
 		{
-			name: "detail, fields and key follow the message",
+			name: "a message that only repeats the status is left out, and detail, fields and key follow",
 			apiErr: APIError{
 				Method:     http.MethodPost,
 				Path:       "/2.0/a/path",
@@ -205,7 +234,33 @@ func TestAPIError_ErrorSaysTheCallTheStatusAndBitbucketsWords(t *testing.T) {
 				},
 				Key: "variable-service.variable.duplicate",
 			},
-			expected: "bitbucket: POST /2.0/a/path: 409 Conflict: Conflict: It already exists. (key: taken, lowercase; name: too long) (variable-service.variable.duplicate)",
+			expected: "bitbucket: POST /2.0/a/path: 409 Conflict: It already exists. (key: taken, lowercase; name: too long) (variable-service.variable.duplicate)",
+		},
+		{
+			name: "a message that repeats the status in other letters is left out too",
+			apiErr: APIError{
+				Method:     http.MethodPost,
+				Path:       "/2.0/a/path",
+				StatusCode: http.StatusBadRequest,
+				Message:    "Bad request",
+				Detail:     "The request body contains invalid properties",
+			},
+			expected: "bitbucket: POST /2.0/a/path: 400 Bad Request: The request body contains invalid properties",
+		},
+		{
+			name: "the arguments follow the key, sorted by name",
+			apiErr: APIError{
+				Method:     http.MethodPost,
+				Path:       "/2.0/a/path",
+				StatusCode: http.StatusBadRequest,
+				Message:    "The request body contains invalid properties",
+				Key:        "deploy-service.request.validation-error",
+				Arguments: map[string]any{
+					"limit": 100,
+					"field": "name",
+				},
+			},
+			expected: "bitbucket: POST /2.0/a/path: 400 Bad Request: The request body contains invalid properties (deploy-service.request.validation-error) (field: name; limit: 100)",
 		},
 		{
 			name: "a long text is cut",
@@ -342,4 +397,13 @@ func TestWithoutURL_DropsEveryAddressInTheChain(t *testing.T) {
 
 	assert.Equal(t, cause, actual)
 	assert.NotContains(t, actual.Error(), "signature")
+}
+
+func TestWithoutURL_NamesOnlyTheOperationOfAnAddressWithoutAnError(t *testing.T) {
+	actual := withoutURL(fmt.Errorf("proxy: %w", &url.Error{
+		Op:  "Get",
+		URL: "https://x/?signature=secret",
+	}))
+
+	assert.EqualError(t, actual, "Get failed")
 }
