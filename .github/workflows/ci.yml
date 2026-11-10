@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
 
+# One run at a time per pull request and on main: a new push to a pull request cancels its run in
+# progress, while a run on main, which tags and releases, finishes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # Read-only unless a job says otherwise: only create-tag and create-release write.
 permissions:
   contents: read
@@ -24,9 +30,10 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26"
+          go-version-file: go.mod
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
+          # Must match GOLANGCI_VERSION in the Makefile, the version make install-golangci installs.
           version: v2.12.2
 
   test:
@@ -37,7 +44,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26"
+          go-version-file: go.mod
       - run: make cover
 
   create-tag:
