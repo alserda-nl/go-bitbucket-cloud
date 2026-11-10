@@ -154,7 +154,8 @@ func TestCall_RefusesAPathPartThatWouldAskForAnotherPath(t *testing.T) {
 
 			err := client.call(t.Context(), http.MethodGet, []string{"2.0", "workspaces", "acme", "projects", testCase.segment}, nil, nil, nil)
 
-			assert.EqualError(t, err, fmt.Sprintf(`bitbucket: the path /2.0/workspaces/acme/projects/%s has a part that is empty, "." or ".."`, testCase.segment), "call should refuse %s", testCase.name)
+			assert.EqualError(t, err, fmt.Sprintf(`bitbucket: invalid option: the path /2.0/workspaces/acme/projects/%s has a part that is empty, "." or ".."`, testCase.segment), "call should refuse %s", testCase.name)
+			assert.ErrorIs(t, err, ErrInvalidOption, "call should refuse %s as an invalid option", testCase.name)
 			assert.Empty(t, transport.requests, "call should send no request for %s", testCase.name)
 		})
 	}

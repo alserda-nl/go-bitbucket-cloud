@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -117,16 +118,18 @@ func TestTokenSource_RenewsOnlyATokenNobodyRenewedYet(t *testing.T) {
 
 func TestTokenSource_Fails(t *testing.T) {
 	cases := []struct {
-		name      string
-		tokenURL  string
-		transport http.RoundTripper
-		expected  string
+		name           string
+		tokenURL       string
+		transport      http.RoundTripper
+		expected       string
+		expectedStatus int
 	}{
 		{
-			name:      "a token address that is not one",
-			tokenURL:  "https://bitbucket.org/%zz",
-			transport: &tokenServer{},
-			expected:  `logging in with the OAuth consumer failed: parse "https://bitbucket.org/%zz": invalid URL escape "%zz"`,
+			name:           "a token address that is not one",
+			tokenURL:       "https://bitbucket.org/%zz",
+			transport:      &tokenServer{},
+			expected:       `logging in with the OAuth consumer failed: parse "https://bitbucket.org/%zz": invalid URL escape "%zz"`,
+			expectedStatus: 0,
 		},
 		{
 			name:     "a connection that fails",
@@ -134,7 +137,8 @@ func TestTokenSource_Fails(t *testing.T) {
 			transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 				return nil, errors.New("connection refused")
 			}),
-			expected: "logging in with the OAuth consumer failed: asking https://bitbucket.org/site/oauth2/access_token for an access token: connection refused",
+			expected:       "logging in with the OAuth consumer failed: asking https://bitbucket.org/site/oauth2/access_token for an access token: connection refused",
+			expectedStatus: 0,
 		},
 		{
 			name:     "an answer that breaks off",
@@ -146,7 +150,8 @@ func TestTokenSource_Fails(t *testing.T) {
 					Body:       failingBody{},
 				}, nil
 			}),
-			expected: "logging in with the OAuth consumer failed: reading the access token from https://bitbucket.org/site/oauth2/access_token: connection reset by peer",
+			expected:       "logging in with the OAuth consumer failed: reading the access token from https://bitbucket.org/site/oauth2/access_token: connection reset by peer",
+			expectedStatus: 0,
 		},
 		{
 			name:     "a refused consumer",
@@ -155,7 +160,8 @@ func TestTokenSource_Fails(t *testing.T) {
 				req.SetBasicAuth("key", "wrong")
 				return (&tokenServer{}).RoundTrip(req)
 			}),
-			expected: "logging in with the OAuth consumer failed: POST /site/oauth2/access_token: 401 Unauthorized: invalid_client: Invalid OAuth client credentials",
+			expected:       "logging in with the OAuth consumer failed: POST /site/oauth2/access_token: 401 Unauthorized: invalid_client: Invalid OAuth client credentials",
+			expectedStatus: http.StatusUnauthorized,
 		},
 		{
 			name:     "an answer without a token",
@@ -163,7 +169,8 @@ func TestTokenSource_Fails(t *testing.T) {
 			transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 				return stubResponse(http.StatusOK, nil, `{"expires_in": 3600}`), nil
 			}),
-			expected: "logging in with the OAuth consumer failed: the token address answered without an access token",
+			expected:       "logging in with the OAuth consumer failed: the token address answered without an access token",
+			expectedStatus: http.StatusOK,
 		},
 		{
 			name:     "an answer that is not JSON",
@@ -171,7 +178,8 @@ func TestTokenSource_Fails(t *testing.T) {
 			transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 				return stubResponse(http.StatusOK, nil, "<html>"), nil
 			}),
-			expected: "logging in with the OAuth consumer failed: decoding the token address's answer: invalid character '<' looking for beginning of value",
+			expected:       "logging in with the OAuth consumer failed: decoding the token address's answer: invalid character '<' looking for beginning of value",
+			expectedStatus: http.StatusOK,
 		},
 	}
 
@@ -184,8 +192,39 @@ func TestTokenSource_Fails(t *testing.T) {
 
 			assert.EqualError(t, err, testCase.expected, "current failed with the wrong error for %s", testCase.name)
 			assert.ErrorIs(t, err, ErrLogin, "current should fail with ErrLogin for %s", testCase.name)
+
+			var loginErr *loginError
+			require.ErrorAs(t, err, &loginErr, "current should fail with a *loginError for %s", testCase.name)
+			assert.Equal(t, testCase.expectedStatus, loginErr.status, "current kept the wrong status of the token address for %s", testCase.name)
 		})
 	}
+}
+
+func TestTokenSource_SaysHowOftenARefusedTokenRequestWasSent(t *testing.T) {
+	retries := newRetries(&recordingTransport{responses: []*http.Response{stubResponse(http.StatusServiceUnavailable, nil, "")}}, 3)
+	retries.repeatable = true
+	tokens := newTestTokenSource(retries, time.Now)
+
+	_, err := tokens.current(t.Context())
+
+	assert.EqualError(t, err, "logging in with the OAuth consumer failed: POST /site/oauth2/access_token: 503 Service Unavailable (after 4 attempts)")
+}
+
+func TestBearerLogin_AFailedTokenRequestMatchesErrLoginThroughACall(t *testing.T) {
+	// A transport that is an http.Client of its own wraps its error in a *url.Error.
+	tokens := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return nil, &url.Error{
+			Op:  "Post",
+			URL: req.URL.String(),
+			Err: errors.New("connection refused"),
+		}
+	})
+	client := newOAuthTestClient(t, tokens, &recordingTransport{responses: []*http.Response{stubResponse(http.StatusOK, nil, "{}")}})
+
+	_, err := client.Workspaces.Get(t.Context(), "acme")
+
+	assert.ErrorIs(t, err, ErrLogin)
+	assert.EqualError(t, err, "bitbucket: GET /2.0/workspaces/acme: logging in with the OAuth consumer failed: asking https://bitbucket.org/site/oauth2/access_token for an access token: connection refused")
 }
 
 func TestTokenSource_ATokenAddressThatAnswers404IsNoObjectNotFound(t *testing.T) {
@@ -332,6 +371,25 @@ func newBearerLogin(api, tokens http.RoundTripper) http.RoundTripper {
 		tokenURL:       tokenAddress,
 		tokenTransport: tokens,
 	})
+}
+
+// newOAuthTestClient makes a client that logs in with an OAuth consumer, sending its token
+// requests to tokens and every other request to api, without retry waits.
+func newOAuthTestClient(t *testing.T, tokens, api http.RoundTripper) *Client {
+	t.Helper()
+
+	route := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.URL.String() == tokenAddress {
+			return tokens.RoundTrip(req)
+		}
+
+		return api.RoundTrip(req)
+	})
+
+	client, err := New(OAuthConsumer{Key: "key", Secret: "secret"}, WithHTTPClient(&http.Client{Transport: route}), WithRetryWait(0))
+	require.NoError(t, err)
+
+	return client
 }
 
 // failingBody is an answer whose reading breaks off.

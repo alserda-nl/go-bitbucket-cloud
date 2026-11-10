@@ -91,8 +91,8 @@ func WithRetryWait(wait time.Duration) Option {
 }
 
 // WithLogger turns logging on, off by default: one line per attempt, the token requests included,
-// at Warn for no answer, a 429 or a 5xx and at Debug for any other. A line never holds the query,
-// a header or a body, and its duration ends at the answer's headers:
+// at Warn for no answer, a 429 or a 5xx other than 501 and at Debug for any other. A line never
+// holds the query, a header or a body, and its duration ends at the answer's headers:
 //
 //	level=DEBUG msg="bitbucket request" method=GET path=/2.0/workspaces/acme attempt=1 duration=84ms status=200
 func WithLogger(logger *slog.Logger) Option {

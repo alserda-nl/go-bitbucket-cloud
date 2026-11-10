@@ -79,6 +79,16 @@ func TestLevelOf_WarnsOfTheAttemptsTheRetriesAreFor(t *testing.T) {
 			expected: slog.LevelWarn,
 		},
 		{
+			name:     "a 500",
+			status:   http.StatusInternalServerError,
+			expected: slog.LevelWarn,
+		},
+		{
+			name:     "a 501, which says the address is wrong",
+			status:   http.StatusNotImplemented,
+			expected: slog.LevelDebug,
+		},
+		{
 			name:     "a 503",
 			status:   http.StatusServiceUnavailable,
 			expected: slog.LevelWarn,

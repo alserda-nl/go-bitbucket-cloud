@@ -39,8 +39,8 @@ func (l *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	return response, err
 }
 
-// levelOf returns Warn for an attempt that got no answer or a temporary status, a 429 or a 5xx, and
-// Debug for any other.
+// levelOf returns Warn for an attempt that got no answer or a temporary status, a 429 or a 5xx
+// other than 501, and Debug for any other.
 func levelOf(response *http.Response, err error) slog.Level {
 	if err != nil || temporary(response.StatusCode) {
 		return slog.LevelWarn

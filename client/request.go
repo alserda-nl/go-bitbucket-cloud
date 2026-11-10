@@ -22,12 +22,13 @@ func apiPath(segments ...string) []string {
 
 // apiURL returns the address of a call on the client's endpoint, each segment escaped:
 // ["2.0", "workspaces", "{abc}"] gives https://api.bitbucket.org/2.0/workspaces/%7Babc%7D. An
-// empty segment, "." or ".." would make the call ask for another path, so it is refused.
+// empty segment, "." or ".." would make the call ask for another path, so it fails with
+// ErrInvalidOption.
 func (c *Client) apiURL(segments []string, query url.Values) (*url.URL, error) {
 	escaped := make([]string, len(segments))
 	for i, segment := range segments {
 		if segment == "" || segment == "." || segment == ".." {
-			return nil, fmt.Errorf("bitbucket: the path /%s has a part that is empty, \".\" or \"..\"", strings.Join(segments, "/"))
+			return nil, fmt.Errorf("%w: the path /%s has a part that is empty, \".\" or \"..\"", ErrInvalidOption, strings.Join(segments, "/"))
 		}
 
 		escaped[i] = url.PathEscape(segment)

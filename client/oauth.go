@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -148,12 +149,12 @@ type tokenAnswer struct {
 }
 
 // fetch asks the token address for a new access token and keeps it; the caller holds the lock.
-// Whatever goes wrong, a refusal included, fails with ErrLogin.
+// Whatever goes wrong, a refusal included, fails with a *loginError, which matches ErrLogin.
 func (s *tokenSource) fetch(ctx context.Context) (string, error) {
 	form := url.Values{"grant_type": {"client_credentials"}}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, s.tokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
-		return "", fmt.Errorf("%w: %w", ErrLogin, err)
+		return "", &loginError{err: err}
 	}
 
 	request.SetBasicAuth(s.key, s.secret)
@@ -162,30 +163,59 @@ func (s *tokenSource) fetch(ctx context.Context) (string, error) {
 
 	response, err := s.transport.RoundTrip(request)
 	if err != nil {
-		return "", fmt.Errorf("%w: asking %s for an access token: %w", ErrLogin, s.tokenURL, err)
+		// Without its *url.Error, which would make a later withoutURL drop ErrLogin with it.
+		return "", &loginError{err: fmt.Errorf("asking %s for an access token: %w", s.tokenURL, withoutURL(err))}
 	}
 	defer func() { _ = response.Body.Close() }()
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		return "", fmt.Errorf("%w: reading the access token from %s: %w", ErrLogin, s.tokenURL, err)
+		return "", &loginError{err: fmt.Errorf("reading the access token from %s: %w", s.tokenURL, err)}
 	}
 	if response.StatusCode != http.StatusOK {
 		refusal := newAPIError(http.MethodPost, request.URL.EscapedPath(), response.StatusCode, response.Header.Get("Content-Type"), body)
+		refusal.Attempts = attemptOf(response)
+
 		// As text, not as an *APIError: its 404 must not match ErrNotFound for the object a call asked for.
-		return "", fmt.Errorf("%w: %s", ErrLogin, refusal.describe())
+		return "", &loginError{status: response.StatusCode, err: errors.New(refusal.describe())}
 	}
 
 	var answer tokenAnswer
 	if err := json.Unmarshal(body, &answer); err != nil {
-		return "", fmt.Errorf("%w: decoding the token address's answer: %w", ErrLogin, err)
+		return "", &loginError{status: response.StatusCode, err: fmt.Errorf("decoding the token address's answer: %w", err)}
 	}
 	if answer.AccessToken == "" {
-		return "", fmt.Errorf("%w: the token address answered without an access token", ErrLogin)
+		return "", &loginError{status: response.StatusCode, err: errors.New("the token address answered without an access token")}
 	}
 
 	s.token = answer.AccessToken
 	s.expiresAt = s.now().Add(time.Duration(answer.ExpiresIn) * time.Second)
 
 	return s.token, nil
+}
+
+// loginError is the error of a token request that got no access token. It matches ErrLogin and
+// keeps the token address's status, so Verify can tell a refusal from a failure a later read can
+// change.
+type loginError struct {
+	// status is the token address's HTTP status, 0 when no whole answer came.
+	status int
+	// err says what went wrong, after ErrLogin's text.
+	err error
+}
+
+// Error returns ErrLogin's text and what went wrong: "logging in with the OAuth consumer failed:
+// POST /site/oauth2/access_token: 401 Unauthorized".
+func (e *loginError) Error() string {
+	return fmt.Sprintf("%s: %s", ErrLogin, e.err)
+}
+
+// Is makes errors.Is(err, ErrLogin) true.
+func (e *loginError) Is(target error) bool {
+	return target == ErrLogin
+}
+
+// Unwrap returns what went wrong, so errors.Is also finds a cause such as the context's.
+func (e *loginError) Unwrap() error {
+	return e.err
 }

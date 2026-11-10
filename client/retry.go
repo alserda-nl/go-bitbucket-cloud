@@ -18,6 +18,15 @@ const longestWait = 5 * time.Second
 // APIError.Attempts.
 type attemptKey struct{}
 
+// oneAttemptKey marks a context whose requests the retries send once.
+type oneAttemptKey struct{}
+
+// withOneAttempt returns a context whose requests the retries send once, for Verify's reads,
+// which Verify's own interval spaces out.
+func withOneAttempt(ctx context.Context) context.Context {
+	return context.WithValue(ctx, oneAttemptKey{}, true)
+}
+
 // retryTransport tries a request again after a 429, 500, 502, 503 or 504, at most maxRetries
 // times. It waits firstWait, doubling up to longestWait, plus or minus 20 percent; a Retry-After
 // header, which Bitbucket does not document, wins when it comes. Connection errors are not tried again.
@@ -36,14 +45,20 @@ type retryTransport struct {
 }
 
 // RoundTrip sends the request, again while the answer allows it, and returns the last answer; a
-// context that ends during a wait fails it.
+// context that ends during a wait fails it. A request whose context withOneAttempt marked is sent
+// once.
 func (r *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	maxRetries := r.maxRetries
+	if req.Context().Value(oneAttemptKey{}) != nil {
+		maxRetries = 0
+	}
+
 	for attempt := 1; ; attempt++ {
 		response, err := r.next.RoundTrip(req.WithContext(context.WithValue(req.Context(), attemptKey{}, attempt)))
 		if err != nil {
 			return nil, err
 		}
-		if attempt > r.maxRetries || !r.retryable(req.Method, response.StatusCode) {
+		if attempt > maxRetries || !r.retryable(req.Method, response.StatusCode) {
 			return response, nil
 		}
 
@@ -79,9 +94,10 @@ func (r *retryTransport) retryable(method string, status int) bool {
 }
 
 // temporary reports whether a status blames Bitbucket or the moment rather than the request: a 429
-// or a 5xx. retryable tries a narrower set again.
+// or a 5xx other than 501 Not Implemented, which says the address is wrong. retryable tries a
+// narrower set again.
 func temporary(status int) bool {
-	return status == http.StatusTooManyRequests || status >= http.StatusInternalServerError
+	return status == http.StatusTooManyRequests || (status >= http.StatusInternalServerError && status != http.StatusNotImplemented)
 }
 
 // waitFor returns the wait before the next attempt: Retry-After when the answer has a usable one,

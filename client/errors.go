@@ -24,7 +24,7 @@ var (
 	// ErrInvalidConfig is New's error for a credential with an empty part or an option it cannot use.
 	ErrInvalidConfig = errors.New("bitbucket: invalid client configuration")
 	// ErrInvalidOption is the error of a call, or of Verify, given an option out of range, such as
-	// WithLimit(0); no request is sent.
+	// WithLimit(0), or a path part it cannot send, such as an empty project key; no request is sent.
 	ErrInvalidOption = errors.New("bitbucket: invalid option")
 	// ErrNotFound matches every 404, whatever its shape. A "not found" that Bitbucket answers with
 	// 400, such as stopping a pipeline run that does not exist, does not match it.

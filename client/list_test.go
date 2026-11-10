@@ -196,7 +196,8 @@ func TestList_RefusesAPathPartThatWouldAskForAnotherPath(t *testing.T) {
 
 	_, err := list[item](t.Context(), client, []string{"2.0", "workspaces", "", "projects"}, 100, nil)
 
-	assert.EqualError(t, err, `bitbucket: the path /2.0/workspaces//projects has a part that is empty, "." or ".."`)
+	assert.EqualError(t, err, `bitbucket: invalid option: the path /2.0/workspaces//projects has a part that is empty, "." or ".."`)
+	assert.ErrorIs(t, err, ErrInvalidOption)
 	assert.Empty(t, transport.requests)
 }
 
