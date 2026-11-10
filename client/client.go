@@ -84,8 +84,9 @@ func WithMaxRetries(maxRetries int) Option {
 }
 
 // WithRetryWait sets the first wait before trying again, 200 milliseconds by default, unless the
-// answer's Retry-After says otherwise. It doubles per attempt up to 5 seconds, give or take 20
-// percent, so the defaults wait about 200, 400 and 800 milliseconds; 0 tries again at once.
+// answer's Retry-After says otherwise: up to a minute, as a longer one returns the answer at once.
+// It doubles per attempt up to 5 seconds, give or take 20 percent, so the defaults wait about 200,
+// 400 and 800 milliseconds; 0 tries again at once.
 func WithRetryWait(wait time.Duration) Option {
 	return func(c *config) { c.retryWait = wait }
 }

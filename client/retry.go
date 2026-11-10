@@ -29,7 +29,8 @@ func withOneAttempt(ctx context.Context) context.Context {
 
 // retryTransport tries a request again after a 429, 500, 502, 503 or 504, at most maxRetries
 // times. It waits firstWait, doubling up to longestWait, plus or minus 20 percent; a Retry-After
-// header, which Bitbucket does not document, wins when it comes. Connection errors are not tried again.
+// header, which Bitbucket does not document, wins when it comes, up to longestRetryAfter.
+// Connection errors are not tried again.
 type retryTransport struct {
 	// next sends each attempt.
 	next http.RoundTripper
@@ -46,19 +47,30 @@ type retryTransport struct {
 
 // RoundTrip sends the request, again while the answer allows it, and returns the last answer; a
 // context that ends during a wait fails it. A request whose context withOneAttempt marked is sent
-// once.
+// once, and an answer whose Retry-After asks for more than longestRetryAfter is returned at once.
 func (r *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	maxRetries := r.maxRetries
 	if req.Context().Value(oneAttemptKey{}) != nil {
 		maxRetries = 0
 	}
 
+	previousStatus := 0
 	for attempt := 1; ; attempt++ {
 		response, err := r.next.RoundTrip(req.WithContext(context.WithValue(req.Context(), attemptKey{}, attempt)))
 		if err != nil {
+			if attempt > 1 {
+				// Without its *url.Error, which would make a later withoutURL drop this text with it.
+				err = fmt.Errorf("attempt %d, after a %d: %w", attempt, previousStatus, withoutURL(err))
+			}
+
 			return nil, err
 		}
 		if attempt > maxRetries || !r.retryable(req.Method, response.StatusCode) {
+			return response, nil
+		}
+
+		wait := r.waitFor(attempt, response)
+		if wait > longestRetryAfter {
 			return response, nil
 		}
 
@@ -68,13 +80,13 @@ func (r *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return response, nil
 		}
 
-		wait := r.waitFor(attempt, response)
 		drainAndClose(response.Body)
 		if err := sleep(req.Context(), wait); err != nil {
 			closeBody(again)
-			return nil, fmt.Errorf("waiting to send it again after a %d: %w", response.StatusCode, err)
+			return nil, fmt.Errorf("waiting %s to send it again after a %d: %w", wait, response.StatusCode, err)
 		}
 
+		previousStatus = response.StatusCode
 		req = again
 	}
 }
@@ -115,14 +127,20 @@ func (r *retryTransport) waitFor(attempt int, response *http.Response) time.Dura
 	return time.Duration(float64(wait) * (0.8 + 0.4*r.randFloat()))
 }
 
-// longestRetryAfter is the most seconds a time.Duration holds; a Retry-After above it is unusable.
-const longestRetryAfter = math.MaxInt64 / int64(time.Second)
+// longestRetryAfter is the longest Retry-After the retries wait for. After a longer one the answer
+// is returned at once: the wait would hold the call, and sending sooner goes against what
+// Bitbucket asked.
+const longestRetryAfter = time.Minute
+
+// mostSeconds is the most whole seconds a time.Duration holds.
+const mostSeconds = math.MaxInt64 / int64(time.Second)
 
 // retryAfter reads a Retry-After header in either of its forms: "120" is 2 minutes, and an HTTP
 // date is the time until then, 0 once it has passed. It reports false for a header it cannot use.
+// Seconds beyond a time.Duration's range read as its longest.
 func retryAfter(header string) (time.Duration, bool) {
-	if seconds, err := strconv.ParseInt(header, 10, 64); err == nil && seconds >= 0 && seconds <= longestRetryAfter {
-		return time.Duration(seconds) * time.Second, true
+	if seconds, err := strconv.ParseInt(header, 10, 64); err == nil && seconds >= 0 {
+		return time.Duration(min(seconds, mostSeconds)) * time.Second, true
 	}
 	if date, err := http.ParseTime(header); err == nil {
 		return max(time.Until(date), 0), true

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -193,7 +194,104 @@ func TestRetryTransport_StopsWaitingWhenTheContextEnds(t *testing.T) {
 	_, err = retries.RoundTrip(request)
 
 	assert.ErrorIs(t, err, context.Canceled)
-	assert.EqualError(t, err, "waiting to send it again after a 503: context canceled")
+	assert.EqualError(t, err, "waiting 5s to send it again after a 503: context canceled")
+}
+
+func TestRetryTransport_WaitsWhatTheAnswerAsksFor(t *testing.T) {
+	next := &recordingTransport{responses: []*http.Response{
+		stubResponse(http.StatusTooManyRequests, http.Header{"Retry-After": {"0"}}, ""),
+		stubResponse(http.StatusOK, nil, ""),
+	}}
+	// The doubling wait would be 5 seconds: only the Retry-After's 0 fits the deadline.
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.bitbucket.org/2.0/thing", nil)
+	require.NoError(t, err)
+
+	retries := newRetries(next, 3)
+	retries.firstWait = time.Hour
+
+	response, err := retries.RoundTrip(request)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	assert.Len(t, next.requests, 2)
+}
+
+func TestRetryTransport_ReturnsTheAnswerAtOnceAfterARetryAfterAboveAMinute(t *testing.T) {
+	cases := []struct {
+		name       string
+		retryAfter string
+	}{
+		{
+			name:       "61 seconds",
+			retryAfter: "61",
+		},
+		{
+			name:       "more seconds than a time.Duration holds",
+			retryAfter: "9223372037",
+		},
+		{
+			name:       "a date two minutes away",
+			retryAfter: time.Now().Add(2 * time.Minute).UTC().Format(http.TimeFormat),
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			next := &recordingTransport{responses: []*http.Response{
+				stubResponse(http.StatusTooManyRequests, http.Header{"Retry-After": {testCase.retryAfter}}, ""),
+				stubResponse(http.StatusOK, nil, ""),
+			}}
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+			defer cancel()
+			request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.bitbucket.org/2.0/thing", nil)
+			require.NoError(t, err)
+
+			response, err := newRetries(next, 3).RoundTrip(request)
+			require.NoError(t, err)
+
+			assert.Equal(t, http.StatusTooManyRequests, response.StatusCode, "RoundTrip should return the 429 at once after a Retry-After of %s", testCase.name)
+			assert.Len(t, next.requests, 1, "RoundTrip should send one attempt after a Retry-After of %s", testCase.name)
+		})
+	}
+}
+
+func TestRetryTransport_WaitsARetryAfterOfAMinute(t *testing.T) {
+	next := &recordingTransport{responses: []*http.Response{
+		stubResponse(http.StatusTooManyRequests, http.Header{"Retry-After": {"60"}}, ""),
+	}}
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.bitbucket.org/2.0/thing", nil)
+	require.NoError(t, err)
+
+	_, err = newRetries(next, 3).RoundTrip(request)
+
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.EqualError(t, err, "waiting 1m0s to send it again after a 429: context deadline exceeded")
+}
+
+func TestRetryTransport_NamesALaterAttemptThatGotNoAnswer(t *testing.T) {
+	attempts := 0
+	client := newTestClient(t, roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		attempts++
+		if attempts == 1 {
+			return stubResponse(http.StatusServiceUnavailable, nil, ""), nil
+		}
+
+		// A transport that is an http.Client of its own wraps its error in a *url.Error.
+		return nil, &url.Error{
+			Op:  "Get",
+			URL: req.URL.String(),
+			Err: io.EOF,
+		}
+	}))
+
+	err := client.call(t.Context(), http.MethodGet, []string{"2.0", "thing"}, nil, nil, nil)
+
+	assert.ErrorIs(t, err, io.EOF)
+	assert.EqualError(t, err, "bitbucket: GET /2.0/thing: attempt 2, after a 503: EOF")
 }
 
 func TestRetryTransport_WaitFor(t *testing.T) {
@@ -245,10 +343,10 @@ func TestRetryTransport_WaitFor(t *testing.T) {
 			expected:   200 * time.Millisecond,
 		},
 		{
-			name:       "a Retry-After too long for a wait is ignored",
+			name:       "a Retry-After too long for a time.Duration is its longest",
 			attempt:    1,
 			retryAfter: "9223372037",
-			expected:   200 * time.Millisecond,
+			expected:   time.Duration(mostSeconds) * time.Second,
 		},
 	}
 
