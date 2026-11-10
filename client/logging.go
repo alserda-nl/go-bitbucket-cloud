@@ -21,11 +21,10 @@ func (l *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	start := time.Now()
 	response, err := l.next.RoundTrip(req)
 
-	attempt, _ := req.Context().Value(attemptKey{}).(int)
 	attributes := []slog.Attr{
 		slog.String("method", req.Method),
 		slog.String("path", req.URL.EscapedPath()),
-		slog.Int("attempt", attempt),
+		slog.Int("attempt", attemptOf(req)),
 		slog.Duration("duration", time.Since(start)),
 	}
 	if err != nil {

@@ -14,20 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// midpoint pins the jitter to a factor of exactly 1.0 (0.8 + 0.4 * 0.5).
-func midpoint() float64 {
-	return 0.5
-}
-
-func newRetries(next http.RoundTripper, maxRetries int) *retryTransport {
-	return &retryTransport{
-		next:       next,
-		maxRetries: maxRetries,
-		firstWait:  time.Millisecond,
-		randFloat:  midpoint,
-	}
-}
-
 func TestRetryTransport_TriesAgainWhatTheAnswerAllows(t *testing.T) {
 	cases := []struct {
 		name             string
@@ -394,46 +380,6 @@ func TestRetryAfter_ReadsAFutureDate(t *testing.T) {
 
 	assert.True(t, ok)
 	assert.InDelta(t, float64(time.Minute), float64(actual), float64(2*time.Second))
-}
-
-// roundTripFunc lets a function stand in for a transport.
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
-	return f(req)
-}
-
-// recordingTransport answers with its responses in turn, the last one again once they run out,
-// and keeps every request and request body it got.
-type recordingTransport struct {
-	responses []*http.Response
-	requests  []*http.Request
-	bodies    []string
-}
-
-func (r *recordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if req.Body != nil {
-		body, _ := io.ReadAll(req.Body)
-		r.bodies = append(r.bodies, string(body))
-	}
-	r.requests = append(r.requests, req)
-
-	response := r.responses[min(len(r.requests), len(r.responses))-1]
-	response.Request = req
-
-	return response, nil
-}
-
-func stubResponse(status int, header http.Header, body string) *http.Response {
-	if header == nil {
-		header = http.Header{}
-	}
-
-	return &http.Response{
-		StatusCode: status,
-		Header:     header,
-		Body:       io.NopCloser(strings.NewReader(body)),
-	}
 }
 
 func TestRetryTransport_KeepsTheCauseTheContextEndedWith(t *testing.T) {

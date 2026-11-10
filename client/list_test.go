@@ -115,6 +115,19 @@ func TestList_RefusesANextLinkItCannotFollow(t *testing.T) {
 	}
 }
 
+func TestList_RefusesANextLinkBackToAnEarlierPage(t *testing.T) {
+	transport := &recordingTransport{responses: []*http.Response{
+		stubResponse(http.StatusOK, nil, `{"values": [{"name": "a"}], "next": "https://api.bitbucket.org/2.0/things?pagelen=100&page=2"}`),
+		stubResponse(http.StatusOK, nil, `{"values": [{"name": "b"}], "next": "https://api.bitbucket.org/2.0/things?pagelen=100"}`),
+	}}
+	client := newTestClient(t, transport)
+
+	_, err := list[item](t.Context(), client, []string{"2.0", "things"}, 100, nil)
+
+	assert.EqualError(t, err, `bitbucket: the list /2.0/things answered a next link to a page it already gave, "https://api.bitbucket.org/2.0/things?pagelen=100"`)
+	assert.Len(t, transport.requests, 2, "list should not ask for page 1 again")
+}
+
 func TestList_Options(t *testing.T) {
 	cases := []struct {
 		name             string
@@ -163,6 +176,13 @@ func TestList_Options(t *testing.T) {
 			expectedPagelen:  "1",
 			expectedRequests: 1,
 			expectedItems:    1,
+		},
+		{
+			name:             "a limit above the list's length",
+			options:          []ListOption{WithLimit(10)},
+			expectedPagelen:  "3",
+			expectedRequests: 3,
+			expectedItems:    7,
 		},
 		{
 			name:             "a smaller page size",

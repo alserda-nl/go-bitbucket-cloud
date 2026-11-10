@@ -173,7 +173,7 @@ func (s *tokenSource) fetch(ctx context.Context) (string, error) {
 	}
 	if response.StatusCode != http.StatusOK {
 		refusal := newAPIError(http.MethodPost, request.URL.EscapedPath(), response.StatusCode, response.Header.Get("Content-Type"), body)
-		refusal.Attempts = attemptOf(response)
+		refusal.Attempts = attemptOf(response.Request)
 
 		// As text, not as an *APIError: its 404 must not match ErrNotFound for the object a call asked for.
 		return "", &loginError{status: response.StatusCode, err: errors.New(refusal.describe())}

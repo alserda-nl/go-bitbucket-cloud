@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -76,13 +75,6 @@ func TestBasicLogin_SendsTheTokenOnlyToTheEndpoint(t *testing.T) {
 			assert.Empty(t, request.Header.Get("Authorization"), "RoundTrip(%s) changed the caller's request", testCase.address)
 		})
 	}
-}
-
-// apiEndpoint is the endpoint the login tests' requests go to.
-func apiEndpoint() *url.URL {
-	endpoint, _ := url.Parse("https://api.bitbucket.org")
-
-	return endpoint
 }
 
 func TestCredentials_HideTheirSecretWhenPrintedLoggedOrEncoded(t *testing.T) {

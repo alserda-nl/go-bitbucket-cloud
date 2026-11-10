@@ -3,7 +3,6 @@ package client
 import (
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"testing"
@@ -125,24 +124,6 @@ func TestSend_ReadsAnAnswerOfExactly32MiB(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// zeros is an endless answer body of zero bytes, made as they are read rather than held.
-type zeros struct{}
-
-func (zeros) Read(p []byte) (int, error) {
-	clear(p)
-
-	return len(p), nil
-}
-
-// longResponse is a 200 whose body holds size zero bytes.
-func longResponse(size int64) *http.Response {
-	return &http.Response{
-		StatusCode: http.StatusOK,
-		Header:     http.Header{},
-		Body:       io.NopCloser(io.LimitReader(zeros{}, size)),
-	}
-}
-
 func TestSend_TurnsAnErrorStatusIntoAnAPIError(t *testing.T) {
 	header := http.Header{"Content-Type": {"application/json"}}
 	client := newTestClient(t, &recordingTransport{responses: []*http.Response{stubResponse(http.StatusNotFound, header, `{"type": "error", "error": {"message": "gone"}}`)}})
@@ -153,16 +134,6 @@ func TestSend_TurnsAnErrorStatusIntoAnAPIError(t *testing.T) {
 	require.ErrorAs(t, err, &apiErr)
 	assert.Equal(t, "gone", apiErr.Message)
 	assert.ErrorIs(t, err, ErrNotFound)
-}
-
-// newTestClient makes a client whose requests go to transport, without retry waits.
-func newTestClient(t *testing.T, transport http.RoundTripper) *Client {
-	t.Helper()
-
-	client, err := New(nil, WithHTTPClient(&http.Client{Transport: transport}), WithRetryWait(0))
-	require.NoError(t, err)
-
-	return client
 }
 
 func TestCall_RefusesAPathPartThatWouldAskForAnotherPath(t *testing.T) {

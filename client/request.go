@@ -102,7 +102,7 @@ func (c *Client) send(ctx context.Context, method string, address *url.URL, body
 	}
 	if response.StatusCode >= http.StatusBadRequest {
 		apiErr := newAPIError(method, path, response.StatusCode, response.Header.Get("Content-Type"), answer)
-		apiErr.Attempts = attemptOf(response)
+		apiErr.Attempts = attemptOf(response.Request)
 		return apiErr
 	}
 	if out == nil {
@@ -143,13 +143,14 @@ func describeAnswer(response *http.Response) string {
 	return fmt.Sprintf("the %d answer", response.StatusCode)
 }
 
-// attemptOf returns the number the retries gave the attempt that got response, or 0 without one.
-func attemptOf(response *http.Response) int {
-	if response.Request == nil {
+// attemptOf returns the number the retries gave req's attempt, or 0 for a nil req or one the
+// retries did not send.
+func attemptOf(req *http.Request) int {
+	if req == nil {
 		return 0
 	}
 
-	attempt, _ := response.Request.Context().Value(attemptKey{}).(int)
+	attempt, _ := req.Context().Value(attemptKey{}).(int)
 
 	return attempt
 }

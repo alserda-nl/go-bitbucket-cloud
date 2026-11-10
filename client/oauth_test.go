@@ -16,8 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const tokenAddress = "https://bitbucket.org/site/oauth2/access_token"
-
 // tokenServer stands in for the token address: it issues token-1, token-2 and so on.
 type tokenServer struct {
 	// expiresIn is how many seconds each token lasts.
@@ -79,20 +77,23 @@ func TestTokenSource_ARequestWaitingForTheTokenLeavesWhenItsContextEnds(t *testi
 
 func TestTokenSource_KeepsATokenUntilItExpires(t *testing.T) {
 	server := &tokenServer{expiresIn: 3600}
-	clock := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
+	issued := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
+	clock := issued
 	tokens := newTestTokenSource(server, func() time.Time { return clock })
 
 	first, err := tokens.current(t.Context())
 	require.NoError(t, err)
-	again, err := tokens.current(t.Context())
+
+	clock = issued.Add(59*time.Minute + 59*time.Second)
+	lastSecond, err := tokens.current(t.Context())
 	require.NoError(t, err)
 
-	clock = clock.Add(time.Hour)
+	clock = issued.Add(time.Hour)
 	expired, err := tokens.current(t.Context())
 	require.NoError(t, err)
 
 	assert.Equal(t, "token-1", first)
-	assert.Equal(t, "token-1", again)
+	assert.Equal(t, "token-1", lastSecond, "a read in the token's last second should still get it")
 	assert.Equal(t, "token-2", expired)
 	assert.Equal(t, []string{"grant_type=client_credentials", "grant_type=client_credentials"}, server.forms)
 }
@@ -120,6 +121,7 @@ func TestTokenSource_Fails(t *testing.T) {
 	cases := []struct {
 		name           string
 		tokenURL       string
+		secret         string
 		transport      http.RoundTripper
 		expected       string
 		expectedStatus int
@@ -127,6 +129,7 @@ func TestTokenSource_Fails(t *testing.T) {
 		{
 			name:           "a token address that is not one",
 			tokenURL:       "https://bitbucket.org/%zz",
+			secret:         "secret",
 			transport:      &tokenServer{},
 			expected:       `logging in with the OAuth consumer failed: parse "https://bitbucket.org/%zz": invalid URL escape "%zz"`,
 			expectedStatus: 0,
@@ -134,6 +137,7 @@ func TestTokenSource_Fails(t *testing.T) {
 		{
 			name:     "a connection that fails",
 			tokenURL: tokenAddress,
+			secret:   "secret",
 			transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 				return nil, errors.New("connection refused")
 			}),
@@ -143,6 +147,7 @@ func TestTokenSource_Fails(t *testing.T) {
 		{
 			name:     "an answer that breaks off",
 			tokenURL: tokenAddress,
+			secret:   "secret",
 			transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 				return &http.Response{
 					StatusCode: http.StatusOK,
@@ -156,6 +161,7 @@ func TestTokenSource_Fails(t *testing.T) {
 		{
 			name:     "an answer longer than 32 MiB",
 			tokenURL: tokenAddress,
+			secret:   "secret",
 			transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 				return longResponse(answerLimit + 1), nil
 			}),
@@ -163,18 +169,17 @@ func TestTokenSource_Fails(t *testing.T) {
 			expectedStatus: 0,
 		},
 		{
-			name:     "a refused consumer",
-			tokenURL: tokenAddress,
-			transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				req.SetBasicAuth("key", "wrong")
-				return (&tokenServer{}).RoundTrip(req)
-			}),
+			name:           "a refused consumer",
+			tokenURL:       tokenAddress,
+			secret:         "wrong",
+			transport:      &tokenServer{},
 			expected:       "logging in with the OAuth consumer failed: POST /site/oauth2/access_token: 401 Unauthorized: invalid_client: Invalid OAuth client credentials",
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
 			name:     "an answer without a token",
 			tokenURL: tokenAddress,
+			secret:   "secret",
 			transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 				return stubResponse(http.StatusOK, nil, `{"expires_in": 3600}`), nil
 			}),
@@ -184,6 +189,7 @@ func TestTokenSource_Fails(t *testing.T) {
 		{
 			name:     "an answer that is not JSON",
 			tokenURL: tokenAddress,
+			secret:   "secret",
 			transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 				return stubResponse(http.StatusOK, nil, "<html>"), nil
 			}),
@@ -194,8 +200,7 @@ func TestTokenSource_Fails(t *testing.T) {
 
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			tokens := newTestTokenSource(testCase.transport, time.Now)
-			tokens.tokenURL = testCase.tokenURL
+			tokens := newTokenSource(testCase.transport, testCase.tokenURL, "key", testCase.secret)
 
 			_, err := tokens.current(t.Context())
 
@@ -267,6 +272,25 @@ func TestBearerLogin_AsksForANewTokenOnceWhenBitbucketRefusesOne(t *testing.T) {
 	assert.Equal(t, "Bearer token-1", api.requests[0].Header.Get("Authorization"))
 	assert.Equal(t, "Bearer token-2", api.requests[1].Header.Get("Authorization"))
 	assert.Equal(t, []string{`{"a": 1}`, `{"a": 1}`}, api.bodies)
+}
+
+func TestBearerLogin_RenewsTheTokenOnlyOnce(t *testing.T) {
+	server := &tokenServer{expiresIn: 3600}
+	renewedRefused := stubResponse(http.StatusUnauthorized, nil, "")
+	api := &recordingTransport{responses: []*http.Response{
+		stubResponse(http.StatusUnauthorized, nil, ""),
+		renewedRefused,
+	}}
+	login := newBearerLogin(api, server)
+	request, err := http.NewRequest(http.MethodGet, "https://api.bitbucket.org/2.0/thing", nil)
+	require.NoError(t, err)
+
+	response, err := login.RoundTrip(request)
+	require.NoError(t, err)
+
+	assert.Same(t, renewedRefused, response, "RoundTrip should return the 401 to the renewed token")
+	assert.Len(t, api.requests, 2, "RoundTrip should send the request with the first and the renewed token only")
+	assert.Equal(t, 2, server.grants, "RoundTrip should renew the token once")
 }
 
 func TestBearerLogin_SendsNoTokenElsewhere(t *testing.T) {
@@ -380,36 +404,6 @@ func newBearerLogin(api, tokens http.RoundTripper) http.RoundTripper {
 		tokenURL:       tokenAddress,
 		tokenTransport: tokens,
 	})
-}
-
-// newOAuthTestClient makes a client that logs in with an OAuth consumer, sending its token
-// requests to tokens and every other request to api, without retry waits.
-func newOAuthTestClient(t *testing.T, tokens, api http.RoundTripper) *Client {
-	t.Helper()
-
-	route := roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.URL.String() == tokenAddress {
-			return tokens.RoundTrip(req)
-		}
-
-		return api.RoundTrip(req)
-	})
-
-	client, err := New(OAuthConsumer{Key: "key", Secret: "secret"}, WithHTTPClient(&http.Client{Transport: route}), WithRetryWait(0))
-	require.NoError(t, err)
-
-	return client
-}
-
-// failingBody is an answer whose reading breaks off.
-type failingBody struct{}
-
-func (failingBody) Read([]byte) (int, error) {
-	return 0, errors.New("connection reset by peer")
-}
-
-func (failingBody) Close() error {
-	return nil
 }
 
 func TestBearerLogin_ReturnsAConnectionErrorAsItIs(t *testing.T) {

@@ -82,7 +82,7 @@ func list[T any](ctx context.Context, c *Client, segments []string, largestPage 
 
 		var current page[T]
 		if err := c.send(ctx, http.MethodGet, address, nil, &current); err != nil {
-			return nil, onPage(err, pageNumber)
+			return nil, withPageNumber(err, pageNumber)
 		}
 
 		items = append(items, current.Values...)
@@ -107,9 +107,9 @@ func list[T any](ctx context.Context, c *Client, segments []string, largestPage 
 	}
 }
 
-// onPage names the page in an error from a list's page after the first, as in "(page 3 of the
-// list)", so the failure does not read like the list's own.
-func onPage(err error, pageNumber int) error {
+// withPageNumber names the page in an error from a list's page after the first, as in "(page 3
+// of the list)", so the failure does not read like the list's own.
+func withPageNumber(err error, pageNumber int) error {
 	if pageNumber == 1 {
 		return err
 	}
