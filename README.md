@@ -126,7 +126,7 @@ Releases follow [semantic versioning](https://semver.org). Every merge to `main`
 
 ## Contributing
 
-Issues and pull requests are welcome. Run `make lint` and `make cover` before opening one. Title the pull request as a Conventional Commit: `main` takes squash merges only, and the title picks the next version. A pull request of one commit is squashed under that commit's title, so title the commit the same way.
+Issues and pull requests are welcome. Run `make lint` and `make cover` before opening one. Title the pull request as a Conventional Commit: `main` takes squash merges only, and the maintainers merge each pull request under its title, which picks the next version.
 
 The fake's samples are Bitbucket's own answers with names and IDs replaced; a change that needs a new one asks the maintainers for it.
 
