@@ -122,7 +122,7 @@ make cover  # every test, and how much of the code they cover
 
 ## Versioning
 
-Releases follow [semantic versioning](https://semver.org). Every merge to `main` tags and releases a version: the [Conventional Commits](https://www.conventionalcommits.org) type of the merged commit picks the bump, and a commit without one releases a patch. Until v1.0.0, a minor release may break the API; the [changelog](CHANGELOG.md) says where.
+Releases follow [semantic versioning](https://semver.org). Every merge to `main` tags and releases a version: the [Conventional Commits](https://www.conventionalcommits.org) type of the merged commit picks the bump, and a commit without one releases a patch. Until v1.0.0, a minor release may break the API; the [release notes](https://github.com/alserda-nl/go-bitbucket-cloud/releases), which list each release's commits, say where.
 
 ## Contributing
 
