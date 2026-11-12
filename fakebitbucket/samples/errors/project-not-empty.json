@@ -1,0 +1,11 @@
+{
+  "body": {
+    "error": {
+      "detail": "Please make sure that the project is empty before deleting it.",
+      "message": "Non-empty project deletion forbidden"
+    },
+    "type": "error"
+  },
+  "content_type": "application/json; charset=utf-8",
+  "status": 403
+}

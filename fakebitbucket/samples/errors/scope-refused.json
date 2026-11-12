@@ -1,0 +1,18 @@
+{
+  "body": {
+    "error": {
+      "detail": {
+        "granted": [
+          "admin:project:bitbucket"
+        ],
+        "required": [
+          "read:project:bitbucket"
+        ]
+      },
+      "message": "Your credentials lack one or more required privilege scopes."
+    },
+    "type": "error"
+  },
+  "content_type": "application/json; charset=utf-8",
+  "status": 403
+}

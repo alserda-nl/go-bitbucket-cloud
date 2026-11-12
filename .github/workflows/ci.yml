@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# One run at a time per pull request and on main: a new push to a pull request cancels its run in
+# progress, while a run on main, which tags and releases, finishes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Read-only unless a job says otherwise: only create-tag and create-release write.
+permissions:
+  contents: read
+
+jobs:
+  determine-tag:
+    name: Calculate tag
+    uses: ./.github/workflows/release-tag.yml
+    permissions:
+      contents: read
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          # Must match GOLANGCI_VERSION in the Makefile, the version make install-golangci installs.
+          version: v2.12.2
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: make cover
+
+  create-tag:
+    needs: [determine-tag, lint, test]
+    if: "${{ github.ref_name == 'main' }}"
+    name: Create tag on GitHub
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Create and push tag
+        env:
+          TAG: ${{ needs.determine-tag.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+  create-release:
+    needs: [determine-tag, create-tag]
+    if: "${{ github.ref_name == 'main' }}"
+    name: Create GitHub release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
+        with:
+          tag_name: ${{ needs.determine-tag.outputs.tag }}
+          name: ${{ needs.determine-tag.outputs.tag }}
+          generate_release_notes: false
+          body: |
+            ## Changes since ${{ needs.determine-tag.outputs.previous_tag }}
+
+            ${{ needs.determine-tag.outputs.changelog }}

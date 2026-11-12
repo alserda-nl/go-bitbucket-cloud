@@ -1,0 +1,220 @@
+package client
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+)
+
+// bearerLogin sends an OAuth consumer's access token as a Bearer token.
+type bearerLogin struct {
+	// next sends the request on.
+	next http.RoundTripper
+	// endpoint is the API's address: only a request to it gets the access token.
+	endpoint *url.URL
+	// tokens hands out the current access token and renews it.
+	tokens *tokenSource
+}
+
+// RoundTrip sends a request that gets the credential with the current access token, and any other
+// as it is. Bitbucket answers 401 to a token it no longer takes (Atlassian's OAuth documentation),
+// so after a 401 it asks for a new token once and sends the request again.
+func (l *bearerLogin) RoundTrip(req *http.Request) (*http.Response, error) {
+	if !getsCredential(req, l.endpoint) {
+		return l.next.RoundTrip(req)
+	}
+
+	token, err := l.tokens.current(req.Context())
+	if err != nil {
+		closeBody(req)
+		return nil, err
+	}
+
+	response, err := l.next.RoundTrip(withBearer(req, token))
+	if err != nil || response.StatusCode != http.StatusUnauthorized {
+		return response, err
+	}
+
+	// A body that cannot be sent again leaves the 401 as the answer.
+	again, err := rewindRequest(req)
+	if err != nil {
+		return response, nil
+	}
+
+	drainAndClose(response.Body)
+	fresh, err := l.tokens.renew(req.Context(), token)
+	if err != nil {
+		closeBody(again)
+		return nil, err
+	}
+
+	return l.next.RoundTrip(withBearer(again, fresh))
+}
+
+// withBearer returns a copy of req that carries token as its Bearer token.
+func withBearer(req *http.Request, token string) *http.Request {
+	authenticated := req.Clone(req.Context())
+	authenticated.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	return authenticated
+}
+
+// tokenSource asks the token address for access tokens with the client credentials grant and
+// keeps the current one until its expires_in has passed. The grant gives no refresh token, so a
+// new token is a new grant.
+type tokenSource struct {
+	// transport sends the token request without an http.Client, which would follow a redirect with
+	// the consumer's key and secret still in its header.
+	transport http.RoundTripper
+	// tokenURL is the token address.
+	tokenURL string
+	// key is the consumer's key.
+	key string
+	// secret is the consumer's secret.
+	secret string
+	// now returns the current time; tests pin it.
+	now func() time.Time
+
+	// lock holds a value while a token is fetched, so requests that need one wait for the same
+	// fetch; a request whose context ends stops waiting.
+	lock chan struct{}
+	// token is the current access token, empty before the first fetch.
+	token string
+	// expiresAt is when token expires, from the answer's expires_in.
+	expiresAt time.Time
+}
+
+// newTokenSource returns a tokenSource without a token: the first request that needs one asks
+// tokenURL for it.
+func newTokenSource(transport http.RoundTripper, tokenURL, key, secret string) *tokenSource {
+	return &tokenSource{
+		transport: transport,
+		tokenURL:  tokenURL,
+		key:       key,
+		secret:    secret,
+		now:       time.Now,
+		lock:      make(chan struct{}, 1),
+	}
+}
+
+// current returns the token, asking for one when there is none or the current one has expired.
+func (s *tokenSource) current(ctx context.Context) (string, error) {
+	return s.whileLocked(ctx, func() (string, error) {
+		if s.token != "" && s.now().Before(s.expiresAt) {
+			return s.token, nil
+		}
+
+		return s.fetch(ctx)
+	})
+}
+
+// renew returns a token other than stale, the one a 401 refused. When another request renewed it
+// in the meantime it returns that one instead of asking again: requests that were refused together
+// otherwise each fetch a token, one after the other.
+func (s *tokenSource) renew(ctx context.Context, stale string) (string, error) {
+	return s.whileLocked(ctx, func() (string, error) {
+		if s.token != stale {
+			return s.token, nil
+		}
+
+		return s.fetch(ctx)
+	})
+}
+
+// whileLocked returns what get returns with the lock held, or gives up when ctx ends before the
+// lock is free.
+func (s *tokenSource) whileLocked(ctx context.Context, get func() (string, error)) (string, error) {
+	select {
+	case s.lock <- struct{}{}:
+	case <-ctx.Done():
+		return "", fmt.Errorf("waiting for another request's access token: %w", context.Cause(ctx))
+	}
+	defer func() { <-s.lock }()
+
+	return get()
+}
+
+// tokenAnswer is the token address's answer; "scope" and "token_type" are not used.
+type tokenAnswer struct {
+	// AccessToken is the access token itself.
+	AccessToken string `json:"access_token"`
+	// ExpiresIn is how many seconds the token lasts.
+	ExpiresIn int `json:"expires_in"`
+}
+
+// fetch asks the token address for a new access token and keeps it; the caller holds the lock.
+// Whatever goes wrong, a refusal included, fails with a *loginError, which matches ErrLogin.
+func (s *tokenSource) fetch(ctx context.Context) (string, error) {
+	form := url.Values{"grant_type": {"client_credentials"}}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, s.tokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", &loginError{err: err}
+	}
+
+	request.SetBasicAuth(s.key, s.secret)
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.Header.Set("Accept", jsonMediaType)
+
+	response, err := s.transport.RoundTrip(request)
+	if err != nil {
+		// Without its *url.Error, which would make a later withoutURL drop ErrLogin with it.
+		return "", &loginError{err: fmt.Errorf("asking %s for an access token: %w", s.tokenURL, withoutURL(err))}
+	}
+	defer func() { _ = response.Body.Close() }()
+
+	body, err := readAnswer(response.Body)
+	if err != nil {
+		return "", &loginError{err: fmt.Errorf("reading the access token from %s: %w", s.tokenURL, err)}
+	}
+	if response.StatusCode != http.StatusOK {
+		refusal := newAPIError(http.MethodPost, request.URL.EscapedPath(), response.StatusCode, response.Header.Get("Content-Type"), body)
+		refusal.Attempts = attemptOf(response.Request)
+
+		// As text, not as an *APIError: its 404 must not match ErrNotFound for the object a call asked for.
+		return "", &loginError{status: response.StatusCode, err: errors.New(refusal.describe())}
+	}
+
+	var answer tokenAnswer
+	if err := json.Unmarshal(body, &answer); err != nil {
+		return "", &loginError{status: response.StatusCode, err: fmt.Errorf("decoding the token address's answer: %w", err)}
+	}
+	if answer.AccessToken == "" {
+		return "", &loginError{status: response.StatusCode, err: errors.New("the token address answered without an access token")}
+	}
+
+	s.token = answer.AccessToken
+	s.expiresAt = s.now().Add(time.Duration(answer.ExpiresIn) * time.Second)
+
+	return s.token, nil
+}
+
+// loginError is the error of a token request that got no access token. It matches ErrLogin and
+// keeps the token address's status, so Verify can tell a refusal from a failure a later read can
+// change.
+type loginError struct {
+	// status is the token address's HTTP status, 0 when no whole answer came.
+	status int
+	// err says what went wrong, after ErrLogin's text.
+	err error
+}
+
+// Error returns ErrLogin's text and what went wrong: "logging in with the OAuth consumer failed:
+// POST /site/oauth2/access_token: 401 Unauthorized".
+func (e *loginError) Error() string {
+	return fmt.Sprintf("%s: %s", ErrLogin, e.err)
+}
+
+// Is makes errors.Is(err, ErrLogin) true.
+func (e *loginError) Is(target error) bool {
+	return target == ErrLogin
+}
+
+// Unwrap returns what went wrong, so errors.Is also finds a cause such as the context's.
+func (e *loginError) Unwrap() error {
+	return e.err
+}

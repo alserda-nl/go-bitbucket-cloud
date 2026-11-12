@@ -1,0 +1,13 @@
+{
+  "body": {
+    "error": {
+      "fields": {
+        "target.hash": "Commit not found: main"
+      },
+      "message": "Bad request"
+    },
+    "type": "error"
+  },
+  "content_type": "application/json; charset=utf-8",
+  "status": 400
+}

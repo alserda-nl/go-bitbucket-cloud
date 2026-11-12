@@ -1,0 +1,16 @@
+{
+  "body": {
+    "error": {
+      "data": {
+        "arguments": {
+          "externalId": "{00000000-0000-4000-8000-000000000001}"
+        },
+        "key": "variable-service.variable.duplicate"
+      },
+      "detail": "A variable with the key provided already exists for account {00000000-0000-4000-8000-000000000001}, environment {00000000-0000-4000-8000-000000000002}.",
+      "message": "Conflict"
+    }
+  },
+  "content_type": "application/json; charset=utf-8",
+  "status": 409
+}

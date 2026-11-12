@@ -1,0 +1,10 @@
+{
+  "body": {
+    "error": {
+      "message": "You may not have access to this project or it no longer exists in this workspace. If you think this project exists and you have access, make sure you are authenticated."
+    },
+    "type": "error"
+  },
+  "content_type": "application/json; charset=utf-8",
+  "status": 404
+}

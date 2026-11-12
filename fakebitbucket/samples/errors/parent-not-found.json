@@ -1,0 +1,15 @@
+{
+  "body": {
+    "error": {
+      "fields": {
+        "parents": [
+          "Commit not found: 0000000000000000000000000000000000000000"
+        ]
+      },
+      "message": "parents: Commit not found: 0000000000000000000000000000000000000000"
+    },
+    "type": "error"
+  },
+  "content_type": "application/json; charset=utf-8",
+  "status": 400
+}
